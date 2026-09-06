@@ -27,6 +27,7 @@ type testEngine struct {
 	mu                sync.Mutex
 	job               *pb.JobAssignment
 	jobs              []*pb.JobAssignment
+	pollResponses     []*pb.PollJobResponse
 	jobPolled         bool
 	pollErrs          []error
 	renewErrs         []error
@@ -91,6 +92,12 @@ func (s *testEngine) PollJob(ctx context.Context, req *pb.PollJobRequest) (*pb.P
 		s.pollErrs = s.pollErrs[1:]
 		s.mu.Unlock()
 		return nil, err
+	}
+	if len(s.pollResponses) > 0 {
+		response := s.pollResponses[0]
+		s.pollResponses = s.pollResponses[1:]
+		s.mu.Unlock()
+		return response, nil
 	}
 	if len(s.jobs) > 0 {
 		job := s.jobs[0]
@@ -505,6 +512,66 @@ func TestWorkerRunPullRampsPollSlotsAboveMinimum(t *testing.T) {
 	}
 }
 
+func TestWorkerRunPullAppliesNegotiatedScaleUpWithinMaximum(t *testing.T) {
+	job := &pb.JobAssignment{
+		JobId:         "run-server-scale-up",
+		RunId:         "run-server-scale-up",
+		ComponentType: pb.ComponentType_COMPONENT_TYPE_FUNCTION,
+		ComponentName: "block",
+		InputData:     []byte(`{}`),
+		LeaseId:       "lease-server-scale-up",
+	}
+	server := &testEngine{
+		pollResponses: []*pb.PollJobResponse{{
+			Job: job,
+			SlotScaling: &pb.SlotScalingHint{
+				Decision:       pb.SlotScalingDecision_SLOT_SCALING_DECISION_SCALE_UP,
+				SuggestedDelta: 99,
+			},
+		}},
+		protocolCaps: []string{serverSlotScalingV1Capability},
+		polled:       make(chan *pb.PollJobRequest, 12),
+		registered:   make(chan *pb.RegisterWorkerSessionRequest, 1),
+		completed:    make(chan *pb.CompleteJobRequest, 1),
+		capacity:     make(chan *pb.ReportWorkerCapacityRequest, 2),
+	}
+	listener := newTestEngineListener(t, server)
+	worker := NewWorker("svc",
+		WithWorkerID("worker-pull"),
+		WithProjectID("proj-1"),
+		WithDeploymentID("dep-1"),
+		WithWorkerMode(WorkerModePull),
+		WithCoordinatorEndpoint("http://bufnet"),
+		WithMaxConcurrency(4),
+		withGRPCDialOptions(grpc.WithContextDialer(testBufconnDialer(listener))),
+	)
+	if err := RegisterFunction(worker, "block", func(ctx *Context, _ map[string]string) (map[string]string, error) {
+		<-ctx.Done()
+		return nil, ctx.Err()
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- worker.Run(ctx) }()
+	registration := <-server.registered
+	if !stringSliceContains(registration.GetSupportedProtocolCapabilities(), serverSlotScalingV1Capability) {
+		t.Fatalf("registration does not advertise slot scaling: %v", registration.GetSupportedProtocolCapabilities())
+	}
+	deadline := time.Now().Add(time.Second)
+	for server.pollMax.Load() < 3 && time.Now().Before(deadline) {
+		time.Sleep(time.Millisecond)
+	}
+	if got := server.pollMax.Load(); got != 3 {
+		t.Fatalf("concurrent parked polls after bounded scale-up = %d, want 3", got)
+	}
+	cancel()
+	if err := <-done; !errors.Is(err, context.Canceled) {
+		t.Fatalf("worker run: %v", err)
+	}
+}
+
 func TestWorkerRunPullRetriesTransientPollErrors(t *testing.T) {
 	server := &testEngine{
 		job: &pb.JobAssignment{
@@ -804,6 +871,77 @@ func TestWorkerRunPullReregistersAfterPermissionDeniedCompletion(t *testing.T) {
 	}
 }
 
+func TestWorkerRunPullContinuesAfterFencedCompletion(t *testing.T) {
+	fenced := status.Error(codes.FailedPrecondition, "lease fence no longer owns the run")
+	server := &testEngine{
+		jobs: []*pb.JobAssignment{
+			{
+				JobId:         "run-fenced-completion",
+				RunId:         "run-fenced-completion",
+				ComponentType: pb.ComponentType_COMPONENT_TYPE_FUNCTION,
+				ComponentName: "greet",
+				InputData:     []byte(`{"name":"Ada"}`),
+				LeaseId:       "lease-stale",
+			},
+			{
+				JobId:         "run-after-fenced-completion",
+				RunId:         "run-after-fenced-completion",
+				ComponentType: pb.ComponentType_COMPONENT_TYPE_FUNCTION,
+				ComponentName: "greet",
+				InputData:     []byte(`{"name":"Grace"}`),
+				LeaseId:       "lease-current",
+			},
+		},
+		completeErrs: []error{fenced},
+		registerIDs:  []string{"session-1", "unexpected-session-2"},
+		registered:   make(chan *pb.RegisterWorkerSessionRequest, 2),
+		completed:    make(chan *pb.CompleteJobRequest, 4),
+		capacity:     make(chan *pb.ReportWorkerCapacityRequest, 4),
+	}
+	listener := newTestEngineListener(t, server)
+	worker := NewWorker("svc",
+		WithWorkerID("worker-pull"),
+		WithProjectID("proj-1"),
+		WithDeploymentID("dep-1"),
+		WithWorkerMode(WorkerModePull),
+		WithCoordinatorEndpoint("http://bufnet"),
+		WithMaxConcurrency(1),
+		WithReconnectBackoff(0, 0),
+		withGRPCDialOptions(grpc.WithContextDialer(testBufconnDialer(listener))),
+	)
+	if err := RegisterFunction(worker, "greet", func(_ *Context, in dispatchGreetInput) (dispatchGreetOutput, error) {
+		return dispatchGreetOutput{Message: "hello " + in.Name}, nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	done := make(chan error, 1)
+	go func() { done <- worker.Run(ctx) }()
+	<-server.registered
+	first := <-server.completed
+	second := <-server.completed
+	if first.GetJobId() != "run-fenced-completion" {
+		t.Fatalf("first completion job = %q", first.GetJobId())
+	}
+	if second.GetJobId() != "run-after-fenced-completion" {
+		t.Fatalf("worker retried or stopped after fenced completion; next completion job = %q", second.GetJobId())
+	}
+	if second.GetWorkerSessionId() != "session-1" {
+		t.Fatalf("worker replaced a healthy session after fenced completion: %q", second.GetWorkerSessionId())
+	}
+	select {
+	case registration := <-server.registered:
+		t.Fatalf("unexpected re-registration after fenced completion: %#v", registration)
+	default:
+	}
+	cancel()
+	if err := <-done; !errors.Is(err, context.Canceled) {
+		t.Fatalf("worker run: %v", err)
+	}
+}
+
 func TestReportPullCapacitySignalsRepeatedPermissionDenied(t *testing.T) {
 	denied := status.Error(codes.PermissionDenied, "worker session is not active")
 	server := &testEngine{
@@ -1081,6 +1219,88 @@ func TestPullRampSpawnCount(t *testing.T) {
 		if got := pullRampSpawnCount(test.total, test.active, test.max); got != test.want {
 			t.Fatalf("pullRampSpawnCount(%d, %d, %d) = %d, want %d", test.total, test.active, test.max, got, test.want)
 		}
+	}
+}
+
+func TestNegotiatedServerSlotScalingHint(t *testing.T) {
+	up := &pb.SlotScalingHint{
+		Decision:       pb.SlotScalingDecision_SLOT_SCALING_DECISION_SCALE_UP,
+		SuggestedDelta: 3,
+	}
+	if hint := negotiatedServerSlotScalingHint(false, up); hint != nil {
+		t.Fatalf("unnegotiated hint = %#v, want nil", hint)
+	}
+	if hint := negotiatedServerSlotScalingHint(true, nil); hint != nil {
+		t.Fatalf("absent hint = %#v, want nil", hint)
+	}
+	if hint := negotiatedServerSlotScalingHint(true, up); hint == nil ||
+		hint.decision != pb.SlotScalingDecision_SLOT_SCALING_DECISION_SCALE_UP || hint.delta != 3 {
+		t.Fatalf("negotiated scale-up hint = %#v", hint)
+	}
+	malformed := &pb.SlotScalingHint{Decision: pb.SlotScalingDecision_SLOT_SCALING_DECISION_SCALE_DOWN}
+	if hint := negotiatedServerSlotScalingHint(true, malformed); hint == nil ||
+		hint.decision != pb.SlotScalingDecision_SLOT_SCALING_DECISION_HOLD {
+		t.Fatalf("zero-delta scale hint must fail safe to HOLD: %#v", hint)
+	}
+}
+
+func TestPullHintSpawnCountIsBoundedAndSuppressesFallback(t *testing.T) {
+	up := &serverSlotScalingHint{
+		decision: pb.SlotScalingDecision_SLOT_SCALING_DECISION_SCALE_UP,
+		delta:    4,
+	}
+	if got := pullHintSpawnCount(7, 7, 8, up); got != 1 {
+		t.Fatalf("bounded scale-up spawn = %d, want 1", got)
+	}
+	hold := &serverSlotScalingHint{decision: pb.SlotScalingDecision_SLOT_SCALING_DECISION_HOLD}
+	if got := pullHintSpawnCount(2, 2, 8, hold); got != 0 {
+		t.Fatalf("HOLD spawn = %d, want 0", got)
+	}
+	if got := pullHintSpawnCount(2, 2, 8, nil); got != 2 {
+		t.Fatalf("legacy fallback spawn = %d, want 2", got)
+	}
+}
+
+func TestServerSlotScalingGateCollapsesDuplicateChanges(t *testing.T) {
+	gate := &serverSlotScalingGate{throttle: time.Hour}
+	if !gate.tryChange() {
+		t.Fatal("first server slot change must be admitted")
+	}
+	if gate.tryChange() {
+		t.Fatal("duplicate server slot change inside throttle window must be suppressed")
+	}
+}
+
+func TestRunPullSlotRetiresOnNegotiatedScaleDown(t *testing.T) {
+	server := &testEngine{
+		pollResponses: []*pb.PollJobResponse{{
+			SlotScaling: &pb.SlotScalingHint{
+				Decision:       pb.SlotScalingDecision_SLOT_SCALING_DECISION_SCALE_DOWN,
+				SuggestedDelta: 1,
+			},
+		}},
+		polled: make(chan *pb.PollJobRequest, 1),
+	}
+	client := newTestEngineClient(t, server)
+	worker := NewWorker("svc", WithWorkerID("worker-pull"), WithProjectID("proj-1"))
+	if err := worker.applyProtocolNegotiation([]string{serverSlotScalingV1Capability}, nil); err != nil {
+		t.Fatal(err)
+	}
+	config := pullSlotConfig{minSlots: 1, maxSlots: 4, claimTimeoutMS: 100, rampThrottle: time.Millisecond}
+	var openPollSlots atomic.Uint32
+	var activeSlots atomic.Uint32
+	var totalSlots atomic.Uint32
+	totalSlots.Store(2)
+	retired, err := worker.runPullSlot(
+		context.Background(), client, "session-1", config, 1,
+		&openPollSlots, &activeSlots, &totalSlots,
+		&serverSlotScalingGate{throttle: time.Millisecond}, nil, make(chan pullSlotEvent, 1),
+	)
+	if err != nil || !retired {
+		t.Fatalf("scale-down result: retired=%v err=%v", retired, err)
+	}
+	if got := totalSlots.Load(); got != 1 {
+		t.Fatalf("total slots after scale-down = %d, want 1", got)
 	}
 }
 

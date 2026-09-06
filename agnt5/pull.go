@@ -17,22 +17,47 @@ import (
 )
 
 const (
-	defaultPollWaitMS          = int64(30_000)
-	defaultClaimTimeoutMS      = int64(300_000)
-	defaultCapacityEvery       = 15 * time.Second
-	defaultPollErrorBackoff    = 250 * time.Millisecond
-	defaultPollErrorBackoffMax = 5 * time.Second
-	sessionRejectThreshold     = 3
-	defaultCompleteJobTimeout  = 3 * time.Second
-	defaultCompleteJobAttempts = 3
-	defaultCompleteJobBackoff  = 100 * time.Millisecond
-	defaultRetireEmptyPolls    = 2
+	defaultPollWaitMS             = int64(30_000)
+	defaultClaimTimeoutMS         = int64(300_000)
+	defaultCapacityEvery          = 15 * time.Second
+	defaultPollErrorBackoff       = 250 * time.Millisecond
+	defaultPollErrorBackoffMax    = 5 * time.Second
+	sessionRejectThreshold        = 3
+	defaultCompleteJobTimeout     = 3 * time.Second
+	defaultCompleteJobAttempts    = 3
+	defaultCompleteJobBackoff     = 100 * time.Millisecond
+	defaultRetireEmptyPolls       = 2
+	defaultSlotRampThrottle       = time.Second
+	serverSlotScalingV1Capability = "server_slot_scaling_v1"
 )
 
 type pullSlotConfig struct {
 	minSlots       uint32
 	maxSlots       uint32
 	claimTimeoutMS int64
+	rampThrottle   time.Duration
+}
+
+type serverSlotScalingHint struct {
+	decision pb.SlotScalingDecision
+	delta    uint32
+}
+
+type serverSlotScalingGate struct {
+	mu         sync.Mutex
+	lastChange time.Time
+	throttle   time.Duration
+}
+
+func (g *serverSlotScalingGate) tryChange() bool {
+	now := time.Now()
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if !g.lastChange.IsZero() && now.Sub(g.lastChange) < g.throttle {
+		return false
+	}
+	g.lastChange = now
+	return true
 }
 
 type pullSlotEventType uint8
@@ -45,8 +70,26 @@ const (
 type pullSlotEvent struct {
 	type_         pullSlotEventType
 	activeStarted uint32
+	slotScaling   *serverSlotScalingHint
 	retired       bool
 	err           error
+}
+
+type definitiveCompletionRejection struct {
+	err error
+}
+
+func (e *definitiveCompletionRejection) Error() string {
+	return e.err.Error()
+}
+
+func (e *definitiveCompletionRejection) Unwrap() error {
+	return e.err
+}
+
+func isDefinitiveCompletionRejection(err error) bool {
+	var rejection *definitiveCompletionRejection
+	return errors.As(err, &rejection)
 }
 
 func (w *Worker) runPullWorker(ctx context.Context, client pb.EngineServiceClient) error {
@@ -83,7 +126,11 @@ func (w *Worker) runPullWorker(ctx context.Context, client pb.EngineServiceClien
 		if policy.GetMaxSlots() > 0 {
 			config.maxSlots = clampUint32(policy.GetMaxSlots(), config.minSlots, 100)
 		}
+		if policy.GetRampThrottleMs() > 0 {
+			config.rampThrottle = time.Duration(policy.GetRampThrottleMs()) * time.Millisecond
+		}
 	}
+	scalingGate := &serverSlotScalingGate{throttle: config.rampThrottle}
 
 	var openPollSlots atomic.Uint32
 	var activeSlots atomic.Uint32
@@ -109,6 +156,7 @@ func (w *Worker) runPullWorker(ctx context.Context, client pb.EngineServiceClien
 				&openPollSlots,
 				&activeSlots,
 				&totalSlots,
+				scalingGate,
 				sessionFailures,
 				slotEvents,
 				&sessionTasks,
@@ -135,11 +183,16 @@ run:
 		case event := <-slotEvents:
 			switch event.type_ {
 			case pullSlotStarted:
-				spawnSlots(pullRampSpawnCount(
+				spawn := pullHintSpawnCount(
 					totalSlots.Load(),
 					event.activeStarted,
 					config.maxSlots,
-				))
+					event.slotScaling,
+				)
+				if spawn > 0 && event.slotScaling != nil && event.slotScaling.decision == pb.SlotScalingDecision_SLOT_SCALING_DECISION_SCALE_UP && !scalingGate.tryChange() {
+					spawn = 0
+				}
+				spawnSlots(spawn)
 			case pullSlotExited:
 				if event.err != nil {
 					result = event.err
@@ -203,6 +256,7 @@ func (w *Worker) pullSlotConfig() pullSlotConfig {
 		minSlots:       minSlots,
 		maxSlots:       maxSlots,
 		claimTimeoutMS: claimTimeoutMS,
+		rampThrottle:   defaultSlotRampThrottle,
 	}
 }
 
@@ -215,6 +269,41 @@ func pullRampSpawnCount(totalSlots, activeSlots, maxSlots uint32) uint32 {
 		return 0
 	}
 	return target - totalSlots
+}
+
+func pullHintSpawnCount(totalSlots, activeSlots, maxSlots uint32, hint *serverSlotScalingHint) uint32 {
+	if hint == nil {
+		return pullRampSpawnCount(totalSlots, activeSlots, maxSlots)
+	}
+	if hint.decision != pb.SlotScalingDecision_SLOT_SCALING_DECISION_SCALE_UP {
+		return 0
+	}
+	room := maxSlots - min(totalSlots, maxSlots)
+	return min(hint.delta, room)
+}
+
+func (w *Worker) serverSlotScalingEnabled() bool {
+	w.protocolMu.RLock()
+	defer w.protocolMu.RUnlock()
+	return w.serverSlotScalingOn
+}
+
+func negotiatedServerSlotScalingHint(enabled bool, hint *pb.SlotScalingHint) *serverSlotScalingHint {
+	if !enabled || hint == nil {
+		return nil
+	}
+	switch hint.GetDecision() {
+	case pb.SlotScalingDecision_SLOT_SCALING_DECISION_HOLD:
+		return &serverSlotScalingHint{decision: pb.SlotScalingDecision_SLOT_SCALING_DECISION_HOLD}
+	case pb.SlotScalingDecision_SLOT_SCALING_DECISION_SCALE_UP,
+		pb.SlotScalingDecision_SLOT_SCALING_DECISION_SCALE_DOWN:
+		if hint.GetSuggestedDelta() == 0 {
+			return &serverSlotScalingHint{decision: pb.SlotScalingDecision_SLOT_SCALING_DECISION_HOLD}
+		}
+		return &serverSlotScalingHint{decision: hint.GetDecision(), delta: hint.GetSuggestedDelta()}
+	default:
+		return nil
+	}
 }
 
 func tryRetirePullSlot(totalSlots, activeSlots *atomic.Uint32, minSlots uint32) bool {
@@ -230,12 +319,12 @@ func tryRetirePullSlot(totalSlots, activeSlots *atomic.Uint32, minSlots uint32) 
 	}
 }
 
-func (w *Worker) launchPullSlot(ctx context.Context, client pb.EngineServiceClient, sessionID string, config pullSlotConfig, slot uint32, openPollSlots, activeSlots, totalSlots *atomic.Uint32, sessionFailures chan<- error, slotEvents chan<- pullSlotEvent, sessionTasks *sync.WaitGroup) {
+func (w *Worker) launchPullSlot(ctx context.Context, client pb.EngineServiceClient, sessionID string, config pullSlotConfig, slot uint32, openPollSlots, activeSlots, totalSlots *atomic.Uint32, scalingGate *serverSlotScalingGate, sessionFailures chan<- error, slotEvents chan<- pullSlotEvent, sessionTasks *sync.WaitGroup) {
 	totalSlots.Add(1)
 	sessionTasks.Add(1)
 	go func() {
 		defer sessionTasks.Done()
-		retired, err := w.runPullSlot(ctx, client, sessionID, config, slot, openPollSlots, activeSlots, totalSlots, sessionFailures, slotEvents)
+		retired, err := w.runPullSlot(ctx, client, sessionID, config, slot, openPollSlots, activeSlots, totalSlots, scalingGate, sessionFailures, slotEvents)
 		if !retired {
 			totalSlots.Add(^uint32(0))
 		}
@@ -246,7 +335,7 @@ func (w *Worker) launchPullSlot(ctx context.Context, client pb.EngineServiceClie
 	}()
 }
 
-func (w *Worker) runPullSlot(ctx context.Context, client pb.EngineServiceClient, sessionID string, config pullSlotConfig, slot uint32, openPollSlots, activeSlots, totalSlots *atomic.Uint32, sessionFailures chan<- error, slotEvents chan<- pullSlotEvent) (bool, error) {
+func (w *Worker) runPullSlot(ctx context.Context, client pb.EngineServiceClient, sessionID string, config pullSlotConfig, slot uint32, openPollSlots, activeSlots, totalSlots *atomic.Uint32, scalingGate *serverSlotScalingGate, sessionFailures chan<- error, slotEvents chan<- pullSlotEvent) (bool, error) {
 	pollBackoff := defaultPollErrorBackoff
 	consecutiveSessionRejects := 0
 	consecutiveEmptyPolls := 0
@@ -287,8 +376,17 @@ func (w *Worker) runPullSlot(ctx context.Context, client pb.EngineServiceClient,
 		}
 		consecutiveSessionRejects = 0
 		pollBackoff = defaultPollErrorBackoff
+		slotScaling := negotiatedServerSlotScalingHint(w.serverSlotScalingEnabled(), pollResp.GetSlotScaling())
 		job := pollResp.GetJob()
 		if job == nil {
+			if slotScaling != nil {
+				consecutiveEmptyPolls = 0
+				if slotScaling.decision == pb.SlotScalingDecision_SLOT_SCALING_DECISION_SCALE_DOWN &&
+					scalingGate.tryChange() && tryRetirePullSlot(totalSlots, activeSlots, config.minSlots) {
+					return true, nil
+				}
+				continue
+			}
 			consecutiveEmptyPolls++
 			if consecutiveEmptyPolls >= retireThreshold && tryRetirePullSlot(totalSlots, activeSlots, config.minSlots) {
 				return true, nil
@@ -299,13 +397,16 @@ func (w *Worker) runPullSlot(ctx context.Context, client pb.EngineServiceClient,
 
 		activeStarted := activeSlots.Add(1)
 		select {
-		case slotEvents <- pullSlotEvent{type_: pullSlotStarted, activeStarted: activeStarted}:
+		case slotEvents <- pullSlotEvent{type_: pullSlotStarted, activeStarted: activeStarted, slotScaling: slotScaling}:
 		case <-ctx.Done():
 			activeSlots.Add(^uint32(0))
 			return false, ctx.Err()
 		}
 		err = w.executePolledJob(ctx, client, sessionID, config.claimTimeoutMS, job, sessionFailures)
 		activeSlots.Add(^uint32(0))
+		if isDefinitiveCompletionRejection(err) {
+			continue
+		}
 		if err != nil {
 			return false, err
 		}
@@ -560,6 +661,9 @@ func (w *Worker) completePolledJobRequestWithRetry(ctx context.Context, client p
 			return nil
 		} else {
 			lastErr = err
+			if isDefinitiveCompletionRejection(err) {
+				return err
+			}
 		}
 		if ctx.Err() != nil {
 			return ctx.Err()
@@ -581,7 +685,13 @@ func (w *Worker) completePolledJobRequestWithin(ctx context.Context, client pb.E
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
-		return fmt.Errorf("agnt5: complete pull job %s: %w", request.GetJobId(), err)
+		wrapped := fmt.Errorf("agnt5: complete pull job %s: %w", request.GetJobId(), err)
+		switch status.Code(err) {
+		case codes.FailedPrecondition, codes.AlreadyExists:
+			return &definitiveCompletionRejection{err: wrapped}
+		default:
+			return wrapped
+		}
 	}
 	if !response.GetAcknowledged() {
 		return fmt.Errorf("agnt5: complete pull job %s was not acknowledged", request.GetJobId())

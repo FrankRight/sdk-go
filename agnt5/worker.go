@@ -80,6 +80,7 @@ type Worker struct {
 	durableSuspensionOn   bool
 	durableActivationWhy  string
 	pullLifecycleOn       bool
+	serverSlotScalingOn   bool
 	foldMu                sync.Mutex
 	lifecycleFolds        map[string]*lifecycleFold
 	externalMu            sync.Mutex
