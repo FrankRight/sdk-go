@@ -156,7 +156,6 @@ func (w *Worker) runPullWorker(ctx context.Context, client pb.EngineServiceClien
 				&openPollSlots,
 				&activeSlots,
 				&totalSlots,
-				scalingGate,
 				sessionFailures,
 				slotEvents,
 				&sessionTasks,
@@ -319,12 +318,12 @@ func tryRetirePullSlot(totalSlots, activeSlots *atomic.Uint32, minSlots uint32) 
 	}
 }
 
-func (w *Worker) launchPullSlot(ctx context.Context, client pb.EngineServiceClient, sessionID string, config pullSlotConfig, slot uint32, openPollSlots, activeSlots, totalSlots *atomic.Uint32, scalingGate *serverSlotScalingGate, sessionFailures chan<- error, slotEvents chan<- pullSlotEvent, sessionTasks *sync.WaitGroup) {
+func (w *Worker) launchPullSlot(ctx context.Context, client pb.EngineServiceClient, sessionID string, config pullSlotConfig, slot uint32, openPollSlots, activeSlots, totalSlots *atomic.Uint32, sessionFailures chan<- error, slotEvents chan<- pullSlotEvent, sessionTasks *sync.WaitGroup) {
 	totalSlots.Add(1)
 	sessionTasks.Add(1)
 	go func() {
 		defer sessionTasks.Done()
-		retired, err := w.runPullSlot(ctx, client, sessionID, config, slot, openPollSlots, activeSlots, totalSlots, scalingGate, sessionFailures, slotEvents)
+		retired, err := w.runPullSlot(ctx, client, sessionID, config, slot, openPollSlots, activeSlots, totalSlots, sessionFailures, slotEvents)
 		if !retired {
 			totalSlots.Add(^uint32(0))
 		}
@@ -335,7 +334,7 @@ func (w *Worker) launchPullSlot(ctx context.Context, client pb.EngineServiceClie
 	}()
 }
 
-func (w *Worker) runPullSlot(ctx context.Context, client pb.EngineServiceClient, sessionID string, config pullSlotConfig, slot uint32, openPollSlots, activeSlots, totalSlots *atomic.Uint32, scalingGate *serverSlotScalingGate, sessionFailures chan<- error, slotEvents chan<- pullSlotEvent) (bool, error) {
+func (w *Worker) runPullSlot(ctx context.Context, client pb.EngineServiceClient, sessionID string, config pullSlotConfig, slot uint32, openPollSlots, activeSlots, totalSlots *atomic.Uint32, sessionFailures chan<- error, slotEvents chan<- pullSlotEvent) (bool, error) {
 	pollBackoff := defaultPollErrorBackoff
 	consecutiveSessionRejects := 0
 	consecutiveEmptyPolls := 0
@@ -382,7 +381,7 @@ func (w *Worker) runPullSlot(ctx context.Context, client pb.EngineServiceClient,
 			if slotScaling != nil {
 				consecutiveEmptyPolls = 0
 				if slotScaling.decision == pb.SlotScalingDecision_SLOT_SCALING_DECISION_SCALE_DOWN &&
-					scalingGate.tryChange() && tryRetirePullSlot(totalSlots, activeSlots, config.minSlots) {
+					tryRetirePullSlot(totalSlots, activeSlots, config.minSlots) {
 					return true, nil
 				}
 				continue

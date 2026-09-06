@@ -1294,7 +1294,7 @@ func TestRunPullSlotRetiresOnNegotiatedScaleDown(t *testing.T) {
 	retired, err := worker.runPullSlot(
 		context.Background(), client, "session-1", config, 1,
 		&openPollSlots, &activeSlots, &totalSlots,
-		&serverSlotScalingGate{throttle: time.Millisecond}, nil, make(chan pullSlotEvent, 1),
+		nil, make(chan pullSlotEvent, 1),
 	)
 	if err != nil || !retired {
 		t.Fatalf("scale-down result: retired=%v err=%v", retired, err)
