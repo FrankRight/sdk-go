@@ -375,7 +375,25 @@ func (w *engineEventWriter) Checkpoint(ctx context.Context, req *pb.CheckpointRe
 	return resp, nil
 }
 
-func (w *engineEventWriter) BeginActivation(ctx context.Context, req *pb.BeginActivationRequest) (*pb.BeginActivationResponse, error) {
+func (w *engineEventWriter) BeginActivation(ctx context.Context, req *pb.BeginActivationRequest) (response *pb.BeginActivationResponse, resultErr error) {
+	timer := startCoreTimer(ctx, "begin")
+	defer func() {
+		switch response.GetOutcome() {
+		case pb.BeginActivationOutcome_BEGIN_ACTIVATION_OUTCOME_EXECUTE:
+			timer.outcome = "execute"
+		case pb.BeginActivationOutcome_BEGIN_ACTIVATION_OUTCOME_REPLAY:
+			timer.outcome = "replay"
+		case pb.BeginActivationOutcome_BEGIN_ACTIVATION_OUTCOME_WAIT:
+			timer.outcome = "wait"
+		case pb.BeginActivationOutcome_BEGIN_ACTIVATION_OUTCOME_CONFLICT:
+			timer.outcome = "conflict"
+		case pb.BeginActivationOutcome_BEGIN_ACTIVATION_OUTCOME_CANCELLED:
+			timer.outcome = "cancelled"
+		default:
+			timer.outcome = "unknown"
+		}
+		timer.finish(ctx, resultErr)
+	}()
 	if w == nil || w.client == nil {
 		return nil, newActivationError(ActivationErrorDurabilityUnavailable, "activation client is not configured", "", 0, nil)
 	}
@@ -391,7 +409,15 @@ func (w *engineEventWriter) BeginActivation(ctx context.Context, req *pb.BeginAc
 	panic("activation retry loop must return")
 }
 
-func (w *engineEventWriter) CompleteActivation(ctx context.Context, req *pb.CompleteActivationRequest) (*pb.CompleteActivationResponse, error) {
+func (w *engineEventWriter) CompleteActivation(ctx context.Context, req *pb.CompleteActivationRequest) (response *pb.CompleteActivationResponse, resultErr error) {
+	timer := startCoreTimer(ctx, "complete")
+	defer func() {
+		timer.outcome = "unknown"
+		if response.GetAccepted() {
+			timer.outcome = "success"
+		}
+		timer.finish(ctx, resultErr)
+	}()
 	if w == nil || w.client == nil {
 		return nil, newActivationError(ActivationErrorDurabilityUnavailable, "activation client is not configured", req.GetActivationId(), req.GetAttempt(), nil)
 	}
@@ -407,7 +433,15 @@ func (w *engineEventWriter) CompleteActivation(ctx context.Context, req *pb.Comp
 	panic("activation retry loop must return")
 }
 
-func (w *engineEventWriter) FailActivation(ctx context.Context, req *pb.FailActivationRequest) (*pb.FailActivationResponse, error) {
+func (w *engineEventWriter) FailActivation(ctx context.Context, req *pb.FailActivationRequest) (response *pb.FailActivationResponse, resultErr error) {
+	timer := startCoreTimer(ctx, "fail")
+	defer func() {
+		timer.outcome = "unknown"
+		if response.GetAccepted() {
+			timer.outcome = "success"
+		}
+		timer.finish(ctx, resultErr)
+	}()
 	if w == nil || w.client == nil {
 		return nil, newActivationError(ActivationErrorDurabilityUnavailable, "activation client is not configured", req.GetActivationId(), req.GetAttempt(), nil)
 	}

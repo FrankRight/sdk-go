@@ -395,13 +395,16 @@ func (w *Worker) runPullSlot(ctx context.Context, client pb.EngineServiceClient,
 		consecutiveEmptyPolls = 0
 
 		activeStarted := activeSlots.Add(1)
-		select {
-		case slotEvents <- pullSlotEvent{type_: pullSlotStarted, activeStarted: activeStarted, slotScaling: slotScaling}:
-		case <-ctx.Done():
-			activeSlots.Add(^uint32(0))
-			return false, ctx.Err()
-		}
-		err = w.executePolledJob(ctx, client, sessionID, config.claimTimeoutMS, job, sessionFailures)
+		err = func() error {
+			executionCtx := w.coreMetrics.claim(ctx, job.GetRunId(), slot)
+			defer executionMetrics(executionCtx).event("released")
+			select {
+			case slotEvents <- pullSlotEvent{type_: pullSlotStarted, activeStarted: activeStarted, slotScaling: slotScaling}:
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+			return w.executePolledJob(executionCtx, client, sessionID, config.claimTimeoutMS, job, sessionFailures)
+		}()
 		activeSlots.Add(^uint32(0))
 		if isDefinitiveCompletionRejection(err) {
 			continue
@@ -437,7 +440,11 @@ func (w *Worker) executePolledJob(ctx context.Context, client pb.EngineServiceCl
 	if w.pullCompletionLifecycleEnabled() && !pullJobStreamingRequested(job.GetMetadata()) {
 		w.beginLifecycleFold(runID)
 	}
-	messages := w.dispatchServiceMessages(jobCtx, req)
+	messages := func() []*pb.ServiceMessage {
+		executionMetrics(jobCtx).event("started")
+		defer executionMetrics(jobCtx).event("handler_finished")
+		return w.dispatchServiceMessages(jobCtx, req)
+	}()
 	held := w.endLifecycleFold(runID)
 	if authorityLost.Load() {
 		// The lease is gone; the runtime drops late lifecycle events after
@@ -695,6 +702,7 @@ func (w *Worker) completePolledJobRequestWithin(ctx context.Context, client pb.E
 	if !response.GetAcknowledged() {
 		return fmt.Errorf("agnt5: complete pull job %s was not acknowledged", request.GetJobId())
 	}
+	executionMetrics(ctx).event("acknowledged")
 	return nil
 }
 
@@ -728,6 +736,7 @@ func (w *Worker) startLeaseRenewal(ctx context.Context, client pb.EngineServiceC
 func (w *Worker) reportPullCapacity(ctx context.Context, client pb.EngineServiceClient, sessionID string, config pullSlotConfig, openPollSlots, activeSlots, desiredSlots *atomic.Uint32, reportEvery time.Duration, sessionFailures chan<- error) {
 	consecutiveSessionRejects := 0
 	report := func() bool {
+		w.coreMetrics.configured(config.maxSlots)
 		_, err := client.ReportWorkerCapacity(ctx, &pb.ReportWorkerCapacityRequest{
 			WorkerId:          w.workerID,
 			WorkerSessionId:   sessionID,

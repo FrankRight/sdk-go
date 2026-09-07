@@ -91,6 +91,7 @@ type Worker struct {
 	telemetryMu           sync.Mutex
 	telemetry             *telemetry
 	telemetryInitialized  bool
+	coreMetrics           *coreMetrics
 }
 
 // NewWorker constructs a Go worker with environment-compatible defaults.
@@ -136,6 +137,9 @@ func NewWorker(serviceName string, opts ...WorkerOption) *Worker {
 		}
 	}
 	w.syncRuntimeMetadata()
+	if os.Getenv("AGNT5_CORE_METRICS_LOGS") == "1" {
+		w.coreMetrics = newCoreMetrics(w.workerID, os.Stderr)
+	}
 	return w
 }
 
