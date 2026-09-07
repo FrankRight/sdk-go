@@ -4,10 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
 	"sync"
 	"time"
 
 	pb "github.com/agnt5dev/sdk-go/internal/pb/api/v1"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 const (
@@ -20,12 +23,13 @@ type engineStateStore struct {
 	projectID string
 	mu        sync.Mutex
 	cache     map[string]engineStateCacheEntry
+	causal    bool
 }
 
 type engineStateCacheEntry struct {
-	values  map[string]any
-	version int64
-	expires time.Time
+	stateJSON []byte
+	version   int64
+	expires   time.Time
 }
 
 type stateWriteAuthority struct {
@@ -44,6 +48,13 @@ func newEngineStateStore(client pb.EngineServiceClient, projectID string) StateS
 		return nil
 	}
 	return &engineStateStore{client: client, projectID: projectID, cache: make(map[string]engineStateCacheEntry)}
+}
+
+// Keep read/write version floors for one invocation, sharing only transport.
+// Completed workflows must not leave their state in a worker-wide cache.
+func (s *engineStateStore) forInvocation() StateStore {
+	return &engineStateStore{client: s.client, projectID: s.projectID,
+		cache: make(map[string]engineStateCacheEntry), causal: true}
 }
 
 func (s *engineStateStore) Get(ctx context.Context, scope StateScope, namespace, key string) (any, bool, error) {
@@ -84,39 +95,53 @@ func (s *engineStateStore) update(ctx context.Context, scope StateScope, namespa
 		return err
 	}
 	var lastErr error
+	var request *pb.PutEntityStateRequest
+	var values map[string]any
+	ambiguous := false
 	for attempt := 0; attempt < 3; attempt++ {
-		values, version, err := s.load(ctx, scope, namespace)
-		if err != nil {
-			return err
-		}
-		mutate(values)
-		payload, err := json.Marshal(values)
-		if err != nil {
-			return err
-		}
-		request := &pb.PutEntityStateRequest{
-			ProjectId:       s.projectID,
-			EntityType:      stateEntityType,
-			EntityKey:       stateEntityKey,
-			Scope:           string(scope),
-			ScopeId:         namespace,
-			StateJson:       payload,
-			ExpectedVersion: version,
-		}
-		if authority.runID != "" {
-			request.RunId = authority.runID
-			request.WorkerId = authority.workerID
-			request.WorkerSessionId = authority.workerSessionID
-			request.LeaseId = authority.leaseID
-			request.Attempt = &authority.attempt
-			request.OperationId = authority.operationID
+		if request == nil {
+			var version int64
+			values, version, err = s.load(ctx, scope, namespace)
+			if err != nil {
+				return err
+			}
+			mutate(values)
+			payload, err := json.Marshal(values)
+			if err != nil {
+				return err
+			}
+			request = &pb.PutEntityStateRequest{
+				ProjectId: s.projectID, EntityType: stateEntityType, EntityKey: stateEntityKey,
+				Scope: string(scope), ScopeId: namespace, StateJson: payload, ExpectedVersion: version,
+			}
+			if authority.runID != "" {
+				request.RunId = authority.runID
+				request.WorkerId = authority.workerID
+				request.WorkerSessionId = authority.workerSessionID
+				request.LeaseId = authority.leaseID
+				request.Attempt = &authority.attempt
+				request.OperationId = authority.operationID
+			}
 		}
 		resp, err := s.client.PutEntityState(ctx, request)
 		if err == nil {
-			s.storeCached(scope, namespace, values, resp.GetNewVersion())
+			s.storeCached(scope, namespace, request.StateJson, resp.GetNewVersion())
 			return nil
 		}
 		lastErr = err
+		if !ambiguous && status.Code(err) == codes.FailedPrecondition &&
+			strings.HasPrefix(status.Convert(err).Message(), "version conflict:") {
+			// This attempt definitely wrote nothing. Refresh before rebasing.
+			s.expireCached(scope, namespace)
+			request = nil
+		} else {
+			// An accepted response may have been lost. Retry the same operation,
+			// payload, expected version and fence even if later routing fails.
+			ambiguous = true
+		}
+		if attempt == 2 {
+			break
+		}
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
@@ -162,8 +187,8 @@ func (s *engineStateStore) load(ctx context.Context, scope StateScope, namespace
 	if s.projectID == "" {
 		return nil, 0, errors.New("agnt5: project id is required for runtime-backed state")
 	}
-	if values, version, ok := s.loadCached(scope, namespace); ok {
-		return values, version, nil
+	if values, version, ok, err := s.loadCached(scope, namespace); ok || err != nil {
+		return values, version, err
 	}
 	resp, err := s.client.GetEntityState(ctx, &pb.GetEntityStateRequest{
 		ProjectId:  s.projectID,
@@ -175,34 +200,75 @@ func (s *engineStateStore) load(ctx context.Context, scope StateScope, namespace
 	if err != nil {
 		return nil, 0, err
 	}
-	if !resp.GetFound() || len(resp.GetStateJson()) == 0 {
-		return map[string]any{}, resp.GetVersion(), nil
+	if s.causal {
+		// Expiry asks the projection for fresh state; it cannot revoke evidence
+		// of a newer state already acknowledged or observed in this invocation.
+		s.mu.Lock()
+		entry, ok := s.cache[stateStoreKey(scope, namespace, "")]
+		s.mu.Unlock()
+		if ok && entry.version > resp.GetVersion() {
+			s.storeCached(scope, namespace, entry.stateJSON, entry.version)
+			values, err := decodeStateValues(entry.stateJSON)
+			return values, entry.version, err
+		}
 	}
-	var values map[string]any
-	if err := json.Unmarshal(resp.GetStateJson(), &values); err != nil {
+	payload := resp.GetStateJson()
+	if !resp.GetFound() || len(resp.GetStateJson()) == 0 {
+		payload = []byte(`{}`)
+	}
+	values, err := decodeStateValues(payload)
+	if err != nil {
 		return nil, 0, err
 	}
-	if values == nil {
-		values = map[string]any{}
+	if s.causal {
+		s.storeCached(scope, namespace, payload, resp.GetVersion())
 	}
 	return values, resp.GetVersion(), nil
 }
 
-func (s *engineStateStore) loadCached(scope StateScope, namespace string) (map[string]any, int64, bool) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	entry, ok := s.cache[stateStoreKey(scope, namespace, "")]
-	if !ok || time.Now().After(entry.expires) {
-		delete(s.cache, stateStoreKey(scope, namespace, ""))
-		return nil, 0, false
+func decodeStateValues(payload []byte) (map[string]any, error) {
+	var values map[string]any
+	if err := json.Unmarshal(payload, &values); err != nil {
+		return nil, err
 	}
-	return cloneAnyMap(entry.values), entry.version, true
+	if values == nil {
+		values = map[string]any{}
+	}
+	return values, nil
 }
 
-func (s *engineStateStore) storeCached(scope StateScope, namespace string, values map[string]any, version int64) {
+func (s *engineStateStore) expireCached(scope StateScope, namespace string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	key := stateStoreKey(scope, namespace, "")
+	if entry, ok := s.cache[key]; ok {
+		entry.expires = time.Time{}
+		s.cache[key] = entry
+	}
+}
+
+func (s *engineStateStore) loadCached(scope StateScope, namespace string) (map[string]any, int64, bool, error) {
+	s.mu.Lock()
+	entry, ok := s.cache[stateStoreKey(scope, namespace, "")]
+	if !ok || time.Now().After(entry.expires) {
+		if !s.causal {
+			delete(s.cache, stateStoreKey(scope, namespace, ""))
+		}
+		s.mu.Unlock()
+		return nil, 0, false, nil
+	}
+	s.mu.Unlock()
+	values, err := decodeStateValues(entry.stateJSON)
+	return values, entry.version, true, err
+}
+
+func (s *engineStateStore) storeCached(scope StateScope, namespace string, payload []byte, version int64) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if current, ok := s.cache[stateStoreKey(scope, namespace, "")]; ok && current.version > version {
+		return
+	}
 	s.cache[stateStoreKey(scope, namespace, "")] = engineStateCacheEntry{
-		values: cloneAnyMap(values), version: version, expires: time.Now().Add(engineStateReadYourWriteTTL),
+		stateJSON: cloneBytes(payload), version: version, expires: time.Now().Add(engineStateReadYourWriteTTL),
 	}
 }
