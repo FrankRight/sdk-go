@@ -218,6 +218,12 @@ The shared Rust foundation and cross-SDK conformance contracts live in
 
 ## Development
 
+For local pull-worker benchmarks, set `AGNT5_CORE_METRICS_LOGS=1` to emit
+`AGNT5_CORE_METRIC` JSON observations on stderr. These correlate slot occupancy
+through completion acknowledgment, actual step body time, and activation RPC
+time including retries. They include run and worker identifiers, never input
+or output payloads. Observation logging is disabled by default.
+
 ```bash
 gofmt -w .
 go vet ./...

@@ -149,6 +149,7 @@ func (w *Worker) protocolRegistrationCapabilities() (supported, required []strin
 	if pullCompletionLifecycleAdvertised() {
 		supported = append(supported, pullCompletionLifecycleV1Capability)
 	}
+	supported = append(supported, serverSlotScalingV1Capability)
 	return supported, required
 }
 
@@ -203,12 +204,15 @@ func (w *Worker) applyProtocolNegotiation(runtimeSupported, runtimeRequired []st
 	}
 	pullLifecycleEnabled := stringSliceContains(runtimeSupported, pullCompletionLifecycleV1Capability) &&
 		stringSliceContains(workerSupported, pullCompletionLifecycleV1Capability)
+	serverSlotScalingEnabled := stringSliceContains(runtimeSupported, serverSlotScalingV1Capability) &&
+		stringSliceContains(workerSupported, serverSlotScalingV1Capability)
 	w.protocolMu.Lock()
 	previousReason := w.durableActivationWhy
 	w.durableActivationOn = enabled
 	w.durableSuspensionOn = enabled && suspensionEnabled
 	w.durableActivationWhy = reason
 	w.pullLifecycleOn = pullLifecycleEnabled
+	w.serverSlotScalingOn = serverSlotScalingEnabled
 	w.protocolMu.Unlock()
 	if reason != "" && reason != previousReason {
 		fmt.Fprintf(os.Stderr, "[WARN] agnt5 durable activation degraded: %s\n", reason)

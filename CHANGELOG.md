@@ -7,6 +7,22 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+## [0.7.1] - 2026-09-08
+
+### Added
+
+- Observe pull-slot lifecycle, activation RPCs, and durable business execution
+  with opt-in core metrics logs.
+- Negotiate server-driven pull-slot scaling while retaining the existing
+  local ramp and idle-retirement policy with older runtimes.
+
+### Fixed
+
+- Preserve causal state snapshots and exact retries after uncertain writes.
+- Retire server-hinted surplus slots concurrently.
+- Keep a healthy pull session polling after the runtime definitively rejects a
+  stale or already-terminal completion instead of retrying and reconnecting.
+
 ## [0.7.0] - 2026-09-04
 
 ### Added

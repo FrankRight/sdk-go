@@ -17,7 +17,7 @@ import (
 )
 
 const (
-	defaultServiceVersion      = "0.7.0"
+	defaultServiceVersion      = "0.7.1"
 	defaultServiceType         = "go"
 	defaultCoordinatorEndpoint = "http://localhost:34186"
 	defaultMaxReconnects       = uint32(5)
@@ -80,6 +80,7 @@ type Worker struct {
 	durableSuspensionOn   bool
 	durableActivationWhy  string
 	pullLifecycleOn       bool
+	serverSlotScalingOn   bool
 	foldMu                sync.Mutex
 	lifecycleFolds        map[string]*lifecycleFold
 	externalMu            sync.Mutex
@@ -90,6 +91,7 @@ type Worker struct {
 	telemetryMu           sync.Mutex
 	telemetry             *telemetry
 	telemetryInitialized  bool
+	coreMetrics           *coreMetrics
 }
 
 // NewWorker constructs a Go worker with environment-compatible defaults.
@@ -135,6 +137,9 @@ func NewWorker(serviceName string, opts ...WorkerOption) *Worker {
 		}
 	}
 	w.syncRuntimeMetadata()
+	if os.Getenv("AGNT5_CORE_METRICS_LOGS") == "1" {
+		w.coreMetrics = newCoreMetrics(w.workerID, os.Stderr)
+	}
 	return w
 }
 
@@ -502,7 +507,11 @@ func (w *Worker) invoke(ctx context.Context, inv Invocation, streamParentCorrela
 		return InvocationResult{}, err
 	}
 	inv = w.withActivationMetadata(inv, component)
-	runCtx := newContext(ctx, inv, w.foldingCheckpointWriterFor(inv.RunID), canonicalProjectID(inv.Metadata), w.stateStore)
+	stateStore := w.stateStore
+	if runtimeState, ok := stateStore.(*engineStateStore); ok {
+		stateStore = runtimeState.forInvocation()
+	}
+	runCtx := newContext(ctx, inv, w.foldingCheckpointWriterFor(inv.RunID), canonicalProjectID(inv.Metadata), stateStore)
 	runCtx.setTelemetry(w.currentTelemetry())
 	runCorrelationID := runCorrelationIDFromRunID(inv.RunID)
 	if len(streamParentCorrelationID) > 1 && streamParentCorrelationID[1] != "" {

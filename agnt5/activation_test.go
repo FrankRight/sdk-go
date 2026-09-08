@@ -460,6 +460,7 @@ func TestWorkerNegotiatesDurableActivationCapability(t *testing.T) {
 		durableActivationV1Capability,
 		durableSuspensionV1Capability,
 		pullCompletionLifecycleV1Capability,
+		serverSlotScalingV1Capability,
 	}) || len(required) != 0 {
 		t.Fatalf("preferred protocols: supported=%v required=%v", supported, required)
 	}
@@ -486,6 +487,7 @@ func TestWorkerNegotiatesDurableActivationCapability(t *testing.T) {
 	if err := preferred.applyProtocolNegotiation([]string{
 		durableActivationV1Capability,
 		pullCompletionLifecycleV1Capability,
+		serverSlotScalingV1Capability,
 	}, nil); err != nil {
 		t.Fatalf("preferred lifecycle runtime: %v", err)
 	}
@@ -508,6 +510,7 @@ func TestWorkerNegotiatesDurableActivationCapability(t *testing.T) {
 		durableActivationV1Capability,
 		durableSuspensionV1Capability,
 		pullCompletionLifecycleV1Capability,
+		serverSlotScalingV1Capability,
 	}) ||
 		!reflect.DeepEqual(required, []string{durableActivationV1Capability}) {
 		t.Fatalf("required protocols: supported=%v required=%v", supported, required)

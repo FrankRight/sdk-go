@@ -452,7 +452,15 @@ func runActivatedStep[T any](ctx *Context, name, stepKey string, plan activation
 		IdempotencyKey: "agnt5:" + begin.GetActivationId(),
 	}
 	startedAt := time.Now()
-	out, userErr := fn(ctx.withActivationExecution(execution), begin.GetActivationId())
+	out, userErr := func() (result T, err error) {
+		timer := startCoreTimer(ctx, "business")
+		defer func() { timer.finish(ctx, err) }()
+		result, err = fn(ctx.withActivationExecution(execution), begin.GetActivationId())
+		if err == nil {
+			timer.outcome = "success"
+		}
+		return result, err
+	}()
 	if userErr != nil {
 		errorData, _ := json.Marshal(map[string]string{"message": userErr.Error(), "type": fmt.Sprintf("%T", userErr)})
 		failed, failErr := ctx.activationWriter.FailActivation(ctx, &pb.FailActivationRequest{

@@ -511,6 +511,58 @@ func (ActivationErrorCode) EnumDescriptor() ([]byte, []int) {
 	return file_api_v1_engine_proto_rawDescGZIP(), []int{7}
 }
 
+type SlotScalingDecision int32
+
+const (
+	SlotScalingDecision_SLOT_SCALING_DECISION_UNSPECIFIED SlotScalingDecision = 0
+	SlotScalingDecision_SLOT_SCALING_DECISION_HOLD        SlotScalingDecision = 1
+	SlotScalingDecision_SLOT_SCALING_DECISION_SCALE_UP    SlotScalingDecision = 2
+	SlotScalingDecision_SLOT_SCALING_DECISION_SCALE_DOWN  SlotScalingDecision = 3
+)
+
+// Enum value maps for SlotScalingDecision.
+var (
+	SlotScalingDecision_name = map[int32]string{
+		0: "SLOT_SCALING_DECISION_UNSPECIFIED",
+		1: "SLOT_SCALING_DECISION_HOLD",
+		2: "SLOT_SCALING_DECISION_SCALE_UP",
+		3: "SLOT_SCALING_DECISION_SCALE_DOWN",
+	}
+	SlotScalingDecision_value = map[string]int32{
+		"SLOT_SCALING_DECISION_UNSPECIFIED": 0,
+		"SLOT_SCALING_DECISION_HOLD":        1,
+		"SLOT_SCALING_DECISION_SCALE_UP":    2,
+		"SLOT_SCALING_DECISION_SCALE_DOWN":  3,
+	}
+)
+
+func (x SlotScalingDecision) Enum() *SlotScalingDecision {
+	p := new(SlotScalingDecision)
+	*p = x
+	return p
+}
+
+func (x SlotScalingDecision) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (SlotScalingDecision) Descriptor() protoreflect.EnumDescriptor {
+	return file_api_v1_engine_proto_enumTypes[8].Descriptor()
+}
+
+func (SlotScalingDecision) Type() protoreflect.EnumType {
+	return &file_api_v1_engine_proto_enumTypes[8]
+}
+
+func (x SlotScalingDecision) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use SlotScalingDecision.Descriptor instead.
+func (SlotScalingDecision) EnumDescriptor() ([]byte, []int) {
+	return file_api_v1_engine_proto_rawDescGZIP(), []int{8}
+}
+
 // LeaseRenewalOutcome distinguishes a committed renewal from a definite loss
 // of execution authority. Transport/status failures remain indeterminate and
 // must be retried only while the caller's current lease is still valid.
@@ -553,11 +605,11 @@ func (x LeaseRenewalOutcome) String() string {
 }
 
 func (LeaseRenewalOutcome) Descriptor() protoreflect.EnumDescriptor {
-	return file_api_v1_engine_proto_enumTypes[8].Descriptor()
+	return file_api_v1_engine_proto_enumTypes[9].Descriptor()
 }
 
 func (LeaseRenewalOutcome) Type() protoreflect.EnumType {
-	return &file_api_v1_engine_proto_enumTypes[8]
+	return &file_api_v1_engine_proto_enumTypes[9]
 }
 
 func (x LeaseRenewalOutcome) Number() protoreflect.EnumNumber {
@@ -566,7 +618,7 @@ func (x LeaseRenewalOutcome) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use LeaseRenewalOutcome.Descriptor instead.
 func (LeaseRenewalOutcome) EnumDescriptor() ([]byte, []int) {
-	return file_api_v1_engine_proto_rawDescGZIP(), []int{8}
+	return file_api_v1_engine_proto_rawDescGZIP(), []int{9}
 }
 
 // Record is the fundamental unit stored in the journal log.
@@ -9895,16 +9947,71 @@ func (x *PollJobRequest) GetClaimTimeoutMs() int64 {
 	return 0
 }
 
+type SlotScalingHint struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	Decision       SlotScalingDecision    `protobuf:"varint,1,opt,name=decision,proto3,enum=api.v1.SlotScalingDecision" json:"decision,omitempty"`
+	SuggestedDelta uint32                 `protobuf:"varint,2,opt,name=suggested_delta,json=suggestedDelta,proto3" json:"suggested_delta,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *SlotScalingHint) Reset() {
+	*x = SlotScalingHint{}
+	mi := &file_api_v1_engine_proto_msgTypes[120]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SlotScalingHint) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SlotScalingHint) ProtoMessage() {}
+
+func (x *SlotScalingHint) ProtoReflect() protoreflect.Message {
+	mi := &file_api_v1_engine_proto_msgTypes[120]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SlotScalingHint.ProtoReflect.Descriptor instead.
+func (*SlotScalingHint) Descriptor() ([]byte, []int) {
+	return file_api_v1_engine_proto_rawDescGZIP(), []int{120}
+}
+
+func (x *SlotScalingHint) GetDecision() SlotScalingDecision {
+	if x != nil {
+		return x.Decision
+	}
+	return SlotScalingDecision_SLOT_SCALING_DECISION_UNSPECIFIED
+}
+
+func (x *SlotScalingHint) GetSuggestedDelta() uint32 {
+	if x != nil {
+		return x.SuggestedDelta
+	}
+	return 0
+}
+
 type PollJobResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Job           *JobAssignment         `protobuf:"bytes,1,opt,name=job,proto3" json:"job,omitempty"` // absent means timeout
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Job   *JobAssignment         `protobuf:"bytes,1,opt,name=job,proto3" json:"job,omitempty"` // absent means timeout
+	// Present only when server_slot_scaling_v1 was negotiated. Older workers
+	// ignore this additive field and retain their local slot policy.
+	SlotScaling   *SlotScalingHint `protobuf:"bytes,2,opt,name=slot_scaling,json=slotScaling,proto3" json:"slot_scaling,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *PollJobResponse) Reset() {
 	*x = PollJobResponse{}
-	mi := &file_api_v1_engine_proto_msgTypes[120]
+	mi := &file_api_v1_engine_proto_msgTypes[121]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9916,7 +10023,7 @@ func (x *PollJobResponse) String() string {
 func (*PollJobResponse) ProtoMessage() {}
 
 func (x *PollJobResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_v1_engine_proto_msgTypes[120]
+	mi := &file_api_v1_engine_proto_msgTypes[121]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9929,12 +10036,19 @@ func (x *PollJobResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PollJobResponse.ProtoReflect.Descriptor instead.
 func (*PollJobResponse) Descriptor() ([]byte, []int) {
-	return file_api_v1_engine_proto_rawDescGZIP(), []int{120}
+	return file_api_v1_engine_proto_rawDescGZIP(), []int{121}
 }
 
 func (x *PollJobResponse) GetJob() *JobAssignment {
 	if x != nil {
 		return x.Job
+	}
+	return nil
+}
+
+func (x *PollJobResponse) GetSlotScaling() *SlotScalingHint {
+	if x != nil {
+		return x.SlotScaling
 	}
 	return nil
 }
@@ -9960,7 +10074,7 @@ type JobAssignment struct {
 
 func (x *JobAssignment) Reset() {
 	*x = JobAssignment{}
-	mi := &file_api_v1_engine_proto_msgTypes[121]
+	mi := &file_api_v1_engine_proto_msgTypes[122]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -9972,7 +10086,7 @@ func (x *JobAssignment) String() string {
 func (*JobAssignment) ProtoMessage() {}
 
 func (x *JobAssignment) ProtoReflect() protoreflect.Message {
-	mi := &file_api_v1_engine_proto_msgTypes[121]
+	mi := &file_api_v1_engine_proto_msgTypes[122]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -9985,7 +10099,7 @@ func (x *JobAssignment) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use JobAssignment.ProtoReflect.Descriptor instead.
 func (*JobAssignment) Descriptor() ([]byte, []int) {
-	return file_api_v1_engine_proto_rawDescGZIP(), []int{121}
+	return file_api_v1_engine_proto_rawDescGZIP(), []int{122}
 }
 
 func (x *JobAssignment) GetJobId() string {
@@ -10091,7 +10205,7 @@ type RenewJobLeaseRequest struct {
 
 func (x *RenewJobLeaseRequest) Reset() {
 	*x = RenewJobLeaseRequest{}
-	mi := &file_api_v1_engine_proto_msgTypes[122]
+	mi := &file_api_v1_engine_proto_msgTypes[123]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10103,7 +10217,7 @@ func (x *RenewJobLeaseRequest) String() string {
 func (*RenewJobLeaseRequest) ProtoMessage() {}
 
 func (x *RenewJobLeaseRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_v1_engine_proto_msgTypes[122]
+	mi := &file_api_v1_engine_proto_msgTypes[123]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10116,7 +10230,7 @@ func (x *RenewJobLeaseRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RenewJobLeaseRequest.ProtoReflect.Descriptor instead.
 func (*RenewJobLeaseRequest) Descriptor() ([]byte, []int) {
-	return file_api_v1_engine_proto_rawDescGZIP(), []int{122}
+	return file_api_v1_engine_proto_rawDescGZIP(), []int{123}
 }
 
 func (x *RenewJobLeaseRequest) GetWorkerId() string {
@@ -10193,7 +10307,7 @@ type RenewJobLeaseResponse struct {
 
 func (x *RenewJobLeaseResponse) Reset() {
 	*x = RenewJobLeaseResponse{}
-	mi := &file_api_v1_engine_proto_msgTypes[123]
+	mi := &file_api_v1_engine_proto_msgTypes[124]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10205,7 +10319,7 @@ func (x *RenewJobLeaseResponse) String() string {
 func (*RenewJobLeaseResponse) ProtoMessage() {}
 
 func (x *RenewJobLeaseResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_v1_engine_proto_msgTypes[123]
+	mi := &file_api_v1_engine_proto_msgTypes[124]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10218,7 +10332,7 @@ func (x *RenewJobLeaseResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RenewJobLeaseResponse.ProtoReflect.Descriptor instead.
 func (*RenewJobLeaseResponse) Descriptor() ([]byte, []int) {
-	return file_api_v1_engine_proto_rawDescGZIP(), []int{123}
+	return file_api_v1_engine_proto_rawDescGZIP(), []int{124}
 }
 
 func (x *RenewJobLeaseResponse) GetRenewed() bool {
@@ -10259,7 +10373,7 @@ type ReportWorkerCapacityRequest struct {
 
 func (x *ReportWorkerCapacityRequest) Reset() {
 	*x = ReportWorkerCapacityRequest{}
-	mi := &file_api_v1_engine_proto_msgTypes[124]
+	mi := &file_api_v1_engine_proto_msgTypes[125]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10271,7 +10385,7 @@ func (x *ReportWorkerCapacityRequest) String() string {
 func (*ReportWorkerCapacityRequest) ProtoMessage() {}
 
 func (x *ReportWorkerCapacityRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_v1_engine_proto_msgTypes[124]
+	mi := &file_api_v1_engine_proto_msgTypes[125]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10284,7 +10398,7 @@ func (x *ReportWorkerCapacityRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReportWorkerCapacityRequest.ProtoReflect.Descriptor instead.
 func (*ReportWorkerCapacityRequest) Descriptor() ([]byte, []int) {
-	return file_api_v1_engine_proto_rawDescGZIP(), []int{124}
+	return file_api_v1_engine_proto_rawDescGZIP(), []int{125}
 }
 
 func (x *ReportWorkerCapacityRequest) GetWorkerId() string {
@@ -10360,7 +10474,7 @@ type ReportWorkerCapacityResponse struct {
 
 func (x *ReportWorkerCapacityResponse) Reset() {
 	*x = ReportWorkerCapacityResponse{}
-	mi := &file_api_v1_engine_proto_msgTypes[125]
+	mi := &file_api_v1_engine_proto_msgTypes[126]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10372,7 +10486,7 @@ func (x *ReportWorkerCapacityResponse) String() string {
 func (*ReportWorkerCapacityResponse) ProtoMessage() {}
 
 func (x *ReportWorkerCapacityResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_v1_engine_proto_msgTypes[125]
+	mi := &file_api_v1_engine_proto_msgTypes[126]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10385,7 +10499,7 @@ func (x *ReportWorkerCapacityResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReportWorkerCapacityResponse.ProtoReflect.Descriptor instead.
 func (*ReportWorkerCapacityResponse) Descriptor() ([]byte, []int) {
-	return file_api_v1_engine_proto_rawDescGZIP(), []int{125}
+	return file_api_v1_engine_proto_rawDescGZIP(), []int{126}
 }
 
 func (x *ReportWorkerCapacityResponse) GetAccepted() bool {
@@ -10434,7 +10548,7 @@ type CompleteJobRequest struct {
 
 func (x *CompleteJobRequest) Reset() {
 	*x = CompleteJobRequest{}
-	mi := &file_api_v1_engine_proto_msgTypes[126]
+	mi := &file_api_v1_engine_proto_msgTypes[127]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10446,7 +10560,7 @@ func (x *CompleteJobRequest) String() string {
 func (*CompleteJobRequest) ProtoMessage() {}
 
 func (x *CompleteJobRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_v1_engine_proto_msgTypes[126]
+	mi := &file_api_v1_engine_proto_msgTypes[127]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10459,7 +10573,7 @@ func (x *CompleteJobRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CompleteJobRequest.ProtoReflect.Descriptor instead.
 func (*CompleteJobRequest) Descriptor() ([]byte, []int) {
-	return file_api_v1_engine_proto_rawDescGZIP(), []int{126}
+	return file_api_v1_engine_proto_rawDescGZIP(), []int{127}
 }
 
 func (x *CompleteJobRequest) GetJobId() string {
@@ -10559,7 +10673,7 @@ type CompleteJobResponse struct {
 
 func (x *CompleteJobResponse) Reset() {
 	*x = CompleteJobResponse{}
-	mi := &file_api_v1_engine_proto_msgTypes[127]
+	mi := &file_api_v1_engine_proto_msgTypes[128]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -10571,7 +10685,7 @@ func (x *CompleteJobResponse) String() string {
 func (*CompleteJobResponse) ProtoMessage() {}
 
 func (x *CompleteJobResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_v1_engine_proto_msgTypes[127]
+	mi := &file_api_v1_engine_proto_msgTypes[128]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -10584,7 +10698,7 @@ func (x *CompleteJobResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CompleteJobResponse.ProtoReflect.Descriptor instead.
 func (*CompleteJobResponse) Descriptor() ([]byte, []int) {
-	return file_api_v1_engine_proto_rawDescGZIP(), []int{127}
+	return file_api_v1_engine_proto_rawDescGZIP(), []int{128}
 }
 
 func (x *CompleteJobResponse) GetAcknowledged() bool {
@@ -11516,9 +11630,13 @@ const file_api_v1_engine_proto_rawDesc = "" +
 	"\tworker_id\x18\x01 \x01(\tR\bworkerId\x12*\n" +
 	"\x11worker_session_id\x18\x02 \x01(\tR\x0fworkerSessionId\x12\x17\n" +
 	"\await_ms\x18\x03 \x01(\x03R\x06waitMs\x12(\n" +
-	"\x10claim_timeout_ms\x18\x04 \x01(\x03R\x0eclaimTimeoutMs\":\n" +
+	"\x10claim_timeout_ms\x18\x04 \x01(\x03R\x0eclaimTimeoutMs\"s\n" +
+	"\x0fSlotScalingHint\x127\n" +
+	"\bdecision\x18\x01 \x01(\x0e2\x1b.api.v1.SlotScalingDecisionR\bdecision\x12'\n" +
+	"\x0fsuggested_delta\x18\x02 \x01(\rR\x0esuggestedDelta\"v\n" +
 	"\x0fPollJobResponse\x12'\n" +
-	"\x03job\x18\x01 \x01(\v2\x15.api.v1.JobAssignmentR\x03job\"\x80\x04\n" +
+	"\x03job\x18\x01 \x01(\v2\x15.api.v1.JobAssignmentR\x03job\x12:\n" +
+	"\fslot_scaling\x18\x02 \x01(\v2\x17.api.v1.SlotScalingHintR\vslotScaling\"\x80\x04\n" +
 	"\rJobAssignment\x12\x15\n" +
 	"\x06job_id\x18\x01 \x01(\tR\x05jobId\x12\x15\n" +
 	"\x06run_id\x18\x02 \x01(\tR\x05runId\x12!\n" +
@@ -11654,7 +11772,12 @@ const file_api_v1_engine_proto_rawDesc = "" +
 	"(ACTIVATION_ERROR_CODE_REFERENCE_REQUIRED\x10\b\x120\n" +
 	",ACTIVATION_ERROR_CODE_STATE_VERSION_CONFLICT\x10\t\x123\n" +
 	"/ACTIVATION_ERROR_CODE_REQUIRED_CHILD_UNRESOLVED\x10\n" +
-	"*\xd9\x01\n" +
+	"*\xa6\x01\n" +
+	"\x13SlotScalingDecision\x12%\n" +
+	"!SLOT_SCALING_DECISION_UNSPECIFIED\x10\x00\x12\x1e\n" +
+	"\x1aSLOT_SCALING_DECISION_HOLD\x10\x01\x12\"\n" +
+	"\x1eSLOT_SCALING_DECISION_SCALE_UP\x10\x02\x12$\n" +
+	" SLOT_SCALING_DECISION_SCALE_DOWN\x10\x03*\xd9\x01\n" +
 	"\x13LeaseRenewalOutcome\x12%\n" +
 	"!LEASE_RENEWAL_OUTCOME_UNSPECIFIED\x10\x00\x12!\n" +
 	"\x1dLEASE_RENEWAL_OUTCOME_RENEWED\x10\x01\x12(\n" +
@@ -11734,8 +11857,8 @@ func file_api_v1_engine_proto_rawDescGZIP() []byte {
 	return file_api_v1_engine_proto_rawDescData
 }
 
-var file_api_v1_engine_proto_enumTypes = make([]protoimpl.EnumInfo, 9)
-var file_api_v1_engine_proto_msgTypes = make([]protoimpl.MessageInfo, 135)
+var file_api_v1_engine_proto_enumTypes = make([]protoimpl.EnumInfo, 10)
+var file_api_v1_engine_proto_msgTypes = make([]protoimpl.MessageInfo, 136)
 var file_api_v1_engine_proto_goTypes = []any{
 	(CheckpointType)(0),                       // 0: api.v1.CheckpointType
 	(ActivationKind)(0),                       // 1: api.v1.ActivationKind
@@ -11745,363 +11868,367 @@ var file_api_v1_engine_proto_goTypes = []any{
 	(ActivationExternalOutcomeCertainty)(0),   // 5: api.v1.ActivationExternalOutcomeCertainty
 	(ActivationStatus)(0),                     // 6: api.v1.ActivationStatus
 	(ActivationErrorCode)(0),                  // 7: api.v1.ActivationErrorCode
-	(LeaseRenewalOutcome)(0),                  // 8: api.v1.LeaseRenewalOutcome
-	(*Record)(nil),                            // 9: api.v1.Record
-	(*AppendRequest)(nil),                     // 10: api.v1.AppendRequest
-	(*AppendResponse)(nil),                    // 11: api.v1.AppendResponse
-	(*AppendBatchRequest)(nil),                // 12: api.v1.AppendBatchRequest
-	(*AppendBatchResponse)(nil),               // 13: api.v1.AppendBatchResponse
-	(*ReadByRunIDRequest)(nil),                // 14: api.v1.ReadByRunIDRequest
-	(*ReadByRunIDResponse)(nil),               // 15: api.v1.ReadByRunIDResponse
-	(*FindByStepKeyRequest)(nil),              // 16: api.v1.FindByStepKeyRequest
-	(*FindByStepKeyResponse)(nil),             // 17: api.v1.FindByStepKeyResponse
-	(*GetRunRequest)(nil),                     // 18: api.v1.GetRunRequest
-	(*GetRunResponse)(nil),                    // 19: api.v1.GetRunResponse
-	(*ListRoutingWorkersRequest)(nil),         // 20: api.v1.ListRoutingWorkersRequest
-	(*ListRoutingWorkersResponse)(nil),        // 21: api.v1.ListRoutingWorkersResponse
-	(*Run)(nil),                               // 22: api.v1.Run
-	(*ModelUsage)(nil),                        // 23: api.v1.ModelUsage
-	(*TailRequest)(nil),                       // 24: api.v1.TailRequest
-	(*TailResponse)(nil),                      // 25: api.v1.TailResponse
-	(*GetStatusRequest)(nil),                  // 26: api.v1.GetStatusRequest
-	(*GetStatusResponse)(nil),                 // 27: api.v1.GetStatusResponse
-	(*StoreRequest)(nil),                      // 28: api.v1.StoreRequest
-	(*StoreResponse)(nil),                     // 29: api.v1.StoreResponse
-	(*GetRecordsRequest)(nil),                 // 30: api.v1.GetRecordsRequest
-	(*GetRecordsResponse)(nil),                // 31: api.v1.GetRecordsResponse
-	(*SealRequest)(nil),                       // 32: api.v1.SealRequest
-	(*SealResponse)(nil),                      // 33: api.v1.SealResponse
-	(*HeartbeatRequest)(nil),                  // 34: api.v1.HeartbeatRequest
-	(*HeartbeatResponse)(nil),                 // 35: api.v1.HeartbeatResponse
-	(*PartitionStatus)(nil),                   // 36: api.v1.PartitionStatus
-	(*VoteRequest)(nil),                       // 37: api.v1.VoteRequest
-	(*VoteResponse)(nil),                      // 38: api.v1.VoteResponse
-	(*AnnounceLeaderRequest)(nil),             // 39: api.v1.AnnounceLeaderRequest
-	(*AnnounceLeaderResponse)(nil),            // 40: api.v1.AnnounceLeaderResponse
-	(*ForwardAppendRequest)(nil),              // 41: api.v1.ForwardAppendRequest
-	(*ForwardAppendResponse)(nil),             // 42: api.v1.ForwardAppendResponse
-	(*AddMemberRequest)(nil),                  // 43: api.v1.AddMemberRequest
-	(*AddMemberResponse)(nil),                 // 44: api.v1.AddMemberResponse
-	(*RemoveMemberRequest)(nil),               // 45: api.v1.RemoveMemberRequest
-	(*RemoveMemberResponse)(nil),              // 46: api.v1.RemoveMemberResponse
-	(*TransferLeadershipRequest)(nil),         // 47: api.v1.TransferLeadershipRequest
-	(*TransferLeadershipResponse)(nil),        // 48: api.v1.TransferLeadershipResponse
-	(*GetEntityStateRequest)(nil),             // 49: api.v1.GetEntityStateRequest
-	(*GetEntityStateResponse)(nil),            // 50: api.v1.GetEntityStateResponse
-	(*PutEntityStateRequest)(nil),             // 51: api.v1.PutEntityStateRequest
-	(*PutEntityStateResponse)(nil),            // 52: api.v1.PutEntityStateResponse
-	(*Approval)(nil),                          // 53: api.v1.Approval
-	(*GetApprovalRequest)(nil),                // 54: api.v1.GetApprovalRequest
-	(*GetApprovalResponse)(nil),               // 55: api.v1.GetApprovalResponse
-	(*EngineListApprovalsRequest)(nil),        // 56: api.v1.EngineListApprovalsRequest
-	(*EngineListApprovalsResponse)(nil),       // 57: api.v1.EngineListApprovalsResponse
-	(*Signal)(nil),                            // 58: api.v1.Signal
-	(*GetSignalRequest)(nil),                  // 59: api.v1.GetSignalRequest
-	(*GetSignalResponse)(nil),                 // 60: api.v1.GetSignalResponse
-	(*LookupSignalRequest)(nil),               // 61: api.v1.LookupSignalRequest
-	(*LookupSignalResponse)(nil),              // 62: api.v1.LookupSignalResponse
-	(*ListSignalsRequest)(nil),                // 63: api.v1.ListSignalsRequest
-	(*ListSignalsResponse)(nil),               // 64: api.v1.ListSignalsResponse
-	(*Timer)(nil),                             // 65: api.v1.Timer
-	(*GetTimerRequest)(nil),                   // 66: api.v1.GetTimerRequest
-	(*GetTimerResponse)(nil),                  // 67: api.v1.GetTimerResponse
-	(*ListTimersRequest)(nil),                 // 68: api.v1.ListTimersRequest
-	(*ListTimersResponse)(nil),                // 69: api.v1.ListTimersResponse
-	(*ListDueTimersRequest)(nil),              // 70: api.v1.ListDueTimersRequest
-	(*ListDueTimersResponse)(nil),             // 71: api.v1.ListDueTimersResponse
-	(*Job)(nil),                               // 72: api.v1.Job
-	(*GetJobRequest)(nil),                     // 73: api.v1.GetJobRequest
-	(*GetJobResponse)(nil),                    // 74: api.v1.GetJobResponse
-	(*ListJobsByRunRequest)(nil),              // 75: api.v1.ListJobsByRunRequest
-	(*ListJobsByRunResponse)(nil),             // 76: api.v1.ListJobsByRunResponse
-	(*ListJobsByBatchRequest)(nil),            // 77: api.v1.ListJobsByBatchRequest
-	(*ListJobsByBatchResponse)(nil),           // 78: api.v1.ListJobsByBatchResponse
-	(*Batch)(nil),                             // 79: api.v1.Batch
-	(*GetBatchRequest)(nil),                   // 80: api.v1.GetBatchRequest
-	(*GetBatchResponse)(nil),                  // 81: api.v1.GetBatchResponse
-	(*Session)(nil),                           // 82: api.v1.Session
-	(*GetSessionRequest)(nil),                 // 83: api.v1.GetSessionRequest
-	(*GetSessionResponse)(nil),                // 84: api.v1.GetSessionResponse
-	(*ListSessionsRequest)(nil),               // 85: api.v1.ListSessionsRequest
-	(*ListSessionsResponse)(nil),              // 86: api.v1.ListSessionsResponse
-	(*ChatMessage)(nil),                       // 87: api.v1.ChatMessage
-	(*GetMessageRequest)(nil),                 // 88: api.v1.GetMessageRequest
-	(*GetMessageResponse)(nil),                // 89: api.v1.GetMessageResponse
-	(*ListMessagesByCorrelationRequest)(nil),  // 90: api.v1.ListMessagesByCorrelationRequest
-	(*ListMessagesByCorrelationResponse)(nil), // 91: api.v1.ListMessagesByCorrelationResponse
-	(*ListRunsRequest)(nil),                   // 92: api.v1.ListRunsRequest
-	(*ListRunsResponse)(nil),                  // 93: api.v1.ListRunsResponse
-	(*ListEventsRequest)(nil),                 // 94: api.v1.ListEventsRequest
-	(*EventSummary)(nil),                      // 95: api.v1.EventSummary
-	(*ListEventsResponse)(nil),                // 96: api.v1.ListEventsResponse
-	(*GetRunStatsRequest)(nil),                // 97: api.v1.GetRunStatsRequest
-	(*GetRunStatsResponse)(nil),               // 98: api.v1.GetRunStatsResponse
-	(*DurableStepCheckpoint)(nil),             // 99: api.v1.DurableStepCheckpoint
-	(*CheckpointRequest)(nil),                 // 100: api.v1.CheckpointRequest
-	(*CheckpointResponse)(nil),                // 101: api.v1.CheckpointResponse
-	(*ActivationErrorDetail)(nil),             // 102: api.v1.ActivationErrorDetail
-	(*ImmutablePayloadReference)(nil),         // 103: api.v1.ImmutablePayloadReference
-	(*ActivationPayload)(nil),                 // 104: api.v1.ActivationPayload
-	(*ActivationStateMutation)(nil),           // 105: api.v1.ActivationStateMutation
-	(*ActivationOutboxIntent)(nil),            // 106: api.v1.ActivationOutboxIntent
-	(*ActivationUsage)(nil),                   // 107: api.v1.ActivationUsage
-	(*ActivationEvidence)(nil),                // 108: api.v1.ActivationEvidence
-	(*ChildActivationLinkage)(nil),            // 109: api.v1.ChildActivationLinkage
-	(*BeginActivationRequest)(nil),            // 110: api.v1.BeginActivationRequest
-	(*ActivationConflictReceipt)(nil),         // 111: api.v1.ActivationConflictReceipt
-	(*ActivationWaitReceipt)(nil),             // 112: api.v1.ActivationWaitReceipt
-	(*ActivationUnknownOutcomeReceipt)(nil),   // 113: api.v1.ActivationUnknownOutcomeReceipt
-	(*BeginActivationResponse)(nil),           // 114: api.v1.BeginActivationResponse
-	(*CompleteActivationRequest)(nil),         // 115: api.v1.CompleteActivationRequest
-	(*CompleteActivationResponse)(nil),        // 116: api.v1.CompleteActivationResponse
-	(*FailActivationRequest)(nil),             // 117: api.v1.FailActivationRequest
-	(*FailActivationResponse)(nil),            // 118: api.v1.FailActivationResponse
-	(*SuspendActivationRequest)(nil),          // 119: api.v1.SuspendActivationRequest
-	(*SuspendActivationResponse)(nil),         // 120: api.v1.SuspendActivationResponse
-	(*EventStreamMessage)(nil),                // 121: api.v1.EventStreamMessage
-	(*EventStreamAck)(nil),                    // 122: api.v1.EventStreamAck
-	(*PollJobsRequest)(nil),                   // 123: api.v1.PollJobsRequest
-	(*PollJobsResponse)(nil),                  // 124: api.v1.PollJobsResponse
-	(*WorkerSlotPolicy)(nil),                  // 125: api.v1.WorkerSlotPolicy
-	(*RegisterWorkerSessionRequest)(nil),      // 126: api.v1.RegisterWorkerSessionRequest
-	(*RegisterWorkerSessionResponse)(nil),     // 127: api.v1.RegisterWorkerSessionResponse
-	(*PollJobRequest)(nil),                    // 128: api.v1.PollJobRequest
-	(*PollJobResponse)(nil),                   // 129: api.v1.PollJobResponse
-	(*JobAssignment)(nil),                     // 130: api.v1.JobAssignment
-	(*RenewJobLeaseRequest)(nil),              // 131: api.v1.RenewJobLeaseRequest
-	(*RenewJobLeaseResponse)(nil),             // 132: api.v1.RenewJobLeaseResponse
-	(*ReportWorkerCapacityRequest)(nil),       // 133: api.v1.ReportWorkerCapacityRequest
-	(*ReportWorkerCapacityResponse)(nil),      // 134: api.v1.ReportWorkerCapacityResponse
-	(*CompleteJobRequest)(nil),                // 135: api.v1.CompleteJobRequest
-	(*CompleteJobResponse)(nil),               // 136: api.v1.CompleteJobResponse
-	nil,                                       // 137: api.v1.Record.MetadataEntry
-	nil,                                       // 138: api.v1.Run.MetadataEntry
-	nil,                                       // 139: api.v1.Job.MetadataEntry
-	nil,                                       // 140: api.v1.GetRunStatsResponse.CountByStatusEntry
-	nil,                                       // 141: api.v1.GetRunStatsResponse.CountByComponentTypeEntry
-	nil,                                       // 142: api.v1.JobAssignment.MetadataEntry
-	nil,                                       // 143: api.v1.CompleteJobRequest.MetadataEntry
-	(*WorkerInfo)(nil),                        // 144: api.v1.WorkerInfo
-	(*timestamppb.Timestamp)(nil),             // 145: google.protobuf.Timestamp
-	(Priority)(0),                             // 146: api.v1.Priority
-	(*WorkerCapability)(nil),                  // 147: api.v1.WorkerCapability
-	(*ComponentInfo)(nil),                     // 148: api.v1.ComponentInfo
-	(ComponentType)(0),                        // 149: api.v1.ComponentType
-	(WorkerMode)(0),                           // 150: api.v1.WorkerMode
+	(SlotScalingDecision)(0),                  // 8: api.v1.SlotScalingDecision
+	(LeaseRenewalOutcome)(0),                  // 9: api.v1.LeaseRenewalOutcome
+	(*Record)(nil),                            // 10: api.v1.Record
+	(*AppendRequest)(nil),                     // 11: api.v1.AppendRequest
+	(*AppendResponse)(nil),                    // 12: api.v1.AppendResponse
+	(*AppendBatchRequest)(nil),                // 13: api.v1.AppendBatchRequest
+	(*AppendBatchResponse)(nil),               // 14: api.v1.AppendBatchResponse
+	(*ReadByRunIDRequest)(nil),                // 15: api.v1.ReadByRunIDRequest
+	(*ReadByRunIDResponse)(nil),               // 16: api.v1.ReadByRunIDResponse
+	(*FindByStepKeyRequest)(nil),              // 17: api.v1.FindByStepKeyRequest
+	(*FindByStepKeyResponse)(nil),             // 18: api.v1.FindByStepKeyResponse
+	(*GetRunRequest)(nil),                     // 19: api.v1.GetRunRequest
+	(*GetRunResponse)(nil),                    // 20: api.v1.GetRunResponse
+	(*ListRoutingWorkersRequest)(nil),         // 21: api.v1.ListRoutingWorkersRequest
+	(*ListRoutingWorkersResponse)(nil),        // 22: api.v1.ListRoutingWorkersResponse
+	(*Run)(nil),                               // 23: api.v1.Run
+	(*ModelUsage)(nil),                        // 24: api.v1.ModelUsage
+	(*TailRequest)(nil),                       // 25: api.v1.TailRequest
+	(*TailResponse)(nil),                      // 26: api.v1.TailResponse
+	(*GetStatusRequest)(nil),                  // 27: api.v1.GetStatusRequest
+	(*GetStatusResponse)(nil),                 // 28: api.v1.GetStatusResponse
+	(*StoreRequest)(nil),                      // 29: api.v1.StoreRequest
+	(*StoreResponse)(nil),                     // 30: api.v1.StoreResponse
+	(*GetRecordsRequest)(nil),                 // 31: api.v1.GetRecordsRequest
+	(*GetRecordsResponse)(nil),                // 32: api.v1.GetRecordsResponse
+	(*SealRequest)(nil),                       // 33: api.v1.SealRequest
+	(*SealResponse)(nil),                      // 34: api.v1.SealResponse
+	(*HeartbeatRequest)(nil),                  // 35: api.v1.HeartbeatRequest
+	(*HeartbeatResponse)(nil),                 // 36: api.v1.HeartbeatResponse
+	(*PartitionStatus)(nil),                   // 37: api.v1.PartitionStatus
+	(*VoteRequest)(nil),                       // 38: api.v1.VoteRequest
+	(*VoteResponse)(nil),                      // 39: api.v1.VoteResponse
+	(*AnnounceLeaderRequest)(nil),             // 40: api.v1.AnnounceLeaderRequest
+	(*AnnounceLeaderResponse)(nil),            // 41: api.v1.AnnounceLeaderResponse
+	(*ForwardAppendRequest)(nil),              // 42: api.v1.ForwardAppendRequest
+	(*ForwardAppendResponse)(nil),             // 43: api.v1.ForwardAppendResponse
+	(*AddMemberRequest)(nil),                  // 44: api.v1.AddMemberRequest
+	(*AddMemberResponse)(nil),                 // 45: api.v1.AddMemberResponse
+	(*RemoveMemberRequest)(nil),               // 46: api.v1.RemoveMemberRequest
+	(*RemoveMemberResponse)(nil),              // 47: api.v1.RemoveMemberResponse
+	(*TransferLeadershipRequest)(nil),         // 48: api.v1.TransferLeadershipRequest
+	(*TransferLeadershipResponse)(nil),        // 49: api.v1.TransferLeadershipResponse
+	(*GetEntityStateRequest)(nil),             // 50: api.v1.GetEntityStateRequest
+	(*GetEntityStateResponse)(nil),            // 51: api.v1.GetEntityStateResponse
+	(*PutEntityStateRequest)(nil),             // 52: api.v1.PutEntityStateRequest
+	(*PutEntityStateResponse)(nil),            // 53: api.v1.PutEntityStateResponse
+	(*Approval)(nil),                          // 54: api.v1.Approval
+	(*GetApprovalRequest)(nil),                // 55: api.v1.GetApprovalRequest
+	(*GetApprovalResponse)(nil),               // 56: api.v1.GetApprovalResponse
+	(*EngineListApprovalsRequest)(nil),        // 57: api.v1.EngineListApprovalsRequest
+	(*EngineListApprovalsResponse)(nil),       // 58: api.v1.EngineListApprovalsResponse
+	(*Signal)(nil),                            // 59: api.v1.Signal
+	(*GetSignalRequest)(nil),                  // 60: api.v1.GetSignalRequest
+	(*GetSignalResponse)(nil),                 // 61: api.v1.GetSignalResponse
+	(*LookupSignalRequest)(nil),               // 62: api.v1.LookupSignalRequest
+	(*LookupSignalResponse)(nil),              // 63: api.v1.LookupSignalResponse
+	(*ListSignalsRequest)(nil),                // 64: api.v1.ListSignalsRequest
+	(*ListSignalsResponse)(nil),               // 65: api.v1.ListSignalsResponse
+	(*Timer)(nil),                             // 66: api.v1.Timer
+	(*GetTimerRequest)(nil),                   // 67: api.v1.GetTimerRequest
+	(*GetTimerResponse)(nil),                  // 68: api.v1.GetTimerResponse
+	(*ListTimersRequest)(nil),                 // 69: api.v1.ListTimersRequest
+	(*ListTimersResponse)(nil),                // 70: api.v1.ListTimersResponse
+	(*ListDueTimersRequest)(nil),              // 71: api.v1.ListDueTimersRequest
+	(*ListDueTimersResponse)(nil),             // 72: api.v1.ListDueTimersResponse
+	(*Job)(nil),                               // 73: api.v1.Job
+	(*GetJobRequest)(nil),                     // 74: api.v1.GetJobRequest
+	(*GetJobResponse)(nil),                    // 75: api.v1.GetJobResponse
+	(*ListJobsByRunRequest)(nil),              // 76: api.v1.ListJobsByRunRequest
+	(*ListJobsByRunResponse)(nil),             // 77: api.v1.ListJobsByRunResponse
+	(*ListJobsByBatchRequest)(nil),            // 78: api.v1.ListJobsByBatchRequest
+	(*ListJobsByBatchResponse)(nil),           // 79: api.v1.ListJobsByBatchResponse
+	(*Batch)(nil),                             // 80: api.v1.Batch
+	(*GetBatchRequest)(nil),                   // 81: api.v1.GetBatchRequest
+	(*GetBatchResponse)(nil),                  // 82: api.v1.GetBatchResponse
+	(*Session)(nil),                           // 83: api.v1.Session
+	(*GetSessionRequest)(nil),                 // 84: api.v1.GetSessionRequest
+	(*GetSessionResponse)(nil),                // 85: api.v1.GetSessionResponse
+	(*ListSessionsRequest)(nil),               // 86: api.v1.ListSessionsRequest
+	(*ListSessionsResponse)(nil),              // 87: api.v1.ListSessionsResponse
+	(*ChatMessage)(nil),                       // 88: api.v1.ChatMessage
+	(*GetMessageRequest)(nil),                 // 89: api.v1.GetMessageRequest
+	(*GetMessageResponse)(nil),                // 90: api.v1.GetMessageResponse
+	(*ListMessagesByCorrelationRequest)(nil),  // 91: api.v1.ListMessagesByCorrelationRequest
+	(*ListMessagesByCorrelationResponse)(nil), // 92: api.v1.ListMessagesByCorrelationResponse
+	(*ListRunsRequest)(nil),                   // 93: api.v1.ListRunsRequest
+	(*ListRunsResponse)(nil),                  // 94: api.v1.ListRunsResponse
+	(*ListEventsRequest)(nil),                 // 95: api.v1.ListEventsRequest
+	(*EventSummary)(nil),                      // 96: api.v1.EventSummary
+	(*ListEventsResponse)(nil),                // 97: api.v1.ListEventsResponse
+	(*GetRunStatsRequest)(nil),                // 98: api.v1.GetRunStatsRequest
+	(*GetRunStatsResponse)(nil),               // 99: api.v1.GetRunStatsResponse
+	(*DurableStepCheckpoint)(nil),             // 100: api.v1.DurableStepCheckpoint
+	(*CheckpointRequest)(nil),                 // 101: api.v1.CheckpointRequest
+	(*CheckpointResponse)(nil),                // 102: api.v1.CheckpointResponse
+	(*ActivationErrorDetail)(nil),             // 103: api.v1.ActivationErrorDetail
+	(*ImmutablePayloadReference)(nil),         // 104: api.v1.ImmutablePayloadReference
+	(*ActivationPayload)(nil),                 // 105: api.v1.ActivationPayload
+	(*ActivationStateMutation)(nil),           // 106: api.v1.ActivationStateMutation
+	(*ActivationOutboxIntent)(nil),            // 107: api.v1.ActivationOutboxIntent
+	(*ActivationUsage)(nil),                   // 108: api.v1.ActivationUsage
+	(*ActivationEvidence)(nil),                // 109: api.v1.ActivationEvidence
+	(*ChildActivationLinkage)(nil),            // 110: api.v1.ChildActivationLinkage
+	(*BeginActivationRequest)(nil),            // 111: api.v1.BeginActivationRequest
+	(*ActivationConflictReceipt)(nil),         // 112: api.v1.ActivationConflictReceipt
+	(*ActivationWaitReceipt)(nil),             // 113: api.v1.ActivationWaitReceipt
+	(*ActivationUnknownOutcomeReceipt)(nil),   // 114: api.v1.ActivationUnknownOutcomeReceipt
+	(*BeginActivationResponse)(nil),           // 115: api.v1.BeginActivationResponse
+	(*CompleteActivationRequest)(nil),         // 116: api.v1.CompleteActivationRequest
+	(*CompleteActivationResponse)(nil),        // 117: api.v1.CompleteActivationResponse
+	(*FailActivationRequest)(nil),             // 118: api.v1.FailActivationRequest
+	(*FailActivationResponse)(nil),            // 119: api.v1.FailActivationResponse
+	(*SuspendActivationRequest)(nil),          // 120: api.v1.SuspendActivationRequest
+	(*SuspendActivationResponse)(nil),         // 121: api.v1.SuspendActivationResponse
+	(*EventStreamMessage)(nil),                // 122: api.v1.EventStreamMessage
+	(*EventStreamAck)(nil),                    // 123: api.v1.EventStreamAck
+	(*PollJobsRequest)(nil),                   // 124: api.v1.PollJobsRequest
+	(*PollJobsResponse)(nil),                  // 125: api.v1.PollJobsResponse
+	(*WorkerSlotPolicy)(nil),                  // 126: api.v1.WorkerSlotPolicy
+	(*RegisterWorkerSessionRequest)(nil),      // 127: api.v1.RegisterWorkerSessionRequest
+	(*RegisterWorkerSessionResponse)(nil),     // 128: api.v1.RegisterWorkerSessionResponse
+	(*PollJobRequest)(nil),                    // 129: api.v1.PollJobRequest
+	(*SlotScalingHint)(nil),                   // 130: api.v1.SlotScalingHint
+	(*PollJobResponse)(nil),                   // 131: api.v1.PollJobResponse
+	(*JobAssignment)(nil),                     // 132: api.v1.JobAssignment
+	(*RenewJobLeaseRequest)(nil),              // 133: api.v1.RenewJobLeaseRequest
+	(*RenewJobLeaseResponse)(nil),             // 134: api.v1.RenewJobLeaseResponse
+	(*ReportWorkerCapacityRequest)(nil),       // 135: api.v1.ReportWorkerCapacityRequest
+	(*ReportWorkerCapacityResponse)(nil),      // 136: api.v1.ReportWorkerCapacityResponse
+	(*CompleteJobRequest)(nil),                // 137: api.v1.CompleteJobRequest
+	(*CompleteJobResponse)(nil),               // 138: api.v1.CompleteJobResponse
+	nil,                                       // 139: api.v1.Record.MetadataEntry
+	nil,                                       // 140: api.v1.Run.MetadataEntry
+	nil,                                       // 141: api.v1.Job.MetadataEntry
+	nil,                                       // 142: api.v1.GetRunStatsResponse.CountByStatusEntry
+	nil,                                       // 143: api.v1.GetRunStatsResponse.CountByComponentTypeEntry
+	nil,                                       // 144: api.v1.JobAssignment.MetadataEntry
+	nil,                                       // 145: api.v1.CompleteJobRequest.MetadataEntry
+	(*WorkerInfo)(nil),                        // 146: api.v1.WorkerInfo
+	(*timestamppb.Timestamp)(nil),             // 147: google.protobuf.Timestamp
+	(Priority)(0),                             // 148: api.v1.Priority
+	(*WorkerCapability)(nil),                  // 149: api.v1.WorkerCapability
+	(*ComponentInfo)(nil),                     // 150: api.v1.ComponentInfo
+	(ComponentType)(0),                        // 151: api.v1.ComponentType
+	(WorkerMode)(0),                           // 152: api.v1.WorkerMode
 }
 var file_api_v1_engine_proto_depIdxs = []int32{
-	137, // 0: api.v1.Record.metadata:type_name -> api.v1.Record.MetadataEntry
-	9,   // 1: api.v1.AppendRequest.record:type_name -> api.v1.Record
-	9,   // 2: api.v1.AppendBatchRequest.records:type_name -> api.v1.Record
-	9,   // 3: api.v1.ReadByRunIDResponse.records:type_name -> api.v1.Record
-	9,   // 4: api.v1.FindByStepKeyResponse.record:type_name -> api.v1.Record
-	22,  // 5: api.v1.GetRunResponse.run:type_name -> api.v1.Run
-	144, // 6: api.v1.ListRoutingWorkersResponse.workers:type_name -> api.v1.WorkerInfo
-	145, // 7: api.v1.Run.submitted_at:type_name -> google.protobuf.Timestamp
-	145, // 8: api.v1.Run.started_at:type_name -> google.protobuf.Timestamp
-	145, // 9: api.v1.Run.completed_at:type_name -> google.protobuf.Timestamp
-	145, // 10: api.v1.Run.gateway_received_at:type_name -> google.protobuf.Timestamp
-	145, // 11: api.v1.Run.assigned_at:type_name -> google.protobuf.Timestamp
-	138, // 12: api.v1.Run.metadata:type_name -> api.v1.Run.MetadataEntry
-	146, // 13: api.v1.Run.priority:type_name -> api.v1.Priority
-	23,  // 14: api.v1.Run.model_usage:type_name -> api.v1.ModelUsage
-	9,   // 15: api.v1.TailResponse.record:type_name -> api.v1.Record
-	9,   // 16: api.v1.StoreRequest.records:type_name -> api.v1.Record
-	9,   // 17: api.v1.GetRecordsResponse.records:type_name -> api.v1.Record
-	36,  // 18: api.v1.HeartbeatRequest.partition_statuses:type_name -> api.v1.PartitionStatus
-	36,  // 19: api.v1.HeartbeatResponse.partition_statuses:type_name -> api.v1.PartitionStatus
-	9,   // 20: api.v1.ForwardAppendRequest.records:type_name -> api.v1.Record
-	145, // 21: api.v1.Approval.requested_at:type_name -> google.protobuf.Timestamp
-	145, // 22: api.v1.Approval.expires_at:type_name -> google.protobuf.Timestamp
-	145, // 23: api.v1.Approval.decided_at:type_name -> google.protobuf.Timestamp
-	53,  // 24: api.v1.GetApprovalResponse.approval:type_name -> api.v1.Approval
-	53,  // 25: api.v1.EngineListApprovalsResponse.approvals:type_name -> api.v1.Approval
-	145, // 26: api.v1.Signal.received_at:type_name -> google.protobuf.Timestamp
-	145, // 27: api.v1.Signal.acknowledged_at:type_name -> google.protobuf.Timestamp
-	145, // 28: api.v1.Signal.expires_at:type_name -> google.protobuf.Timestamp
-	58,  // 29: api.v1.GetSignalResponse.signal:type_name -> api.v1.Signal
-	58,  // 30: api.v1.LookupSignalResponse.signal:type_name -> api.v1.Signal
-	58,  // 31: api.v1.ListSignalsResponse.signals:type_name -> api.v1.Signal
-	145, // 32: api.v1.Timer.fire_at:type_name -> google.protobuf.Timestamp
-	145, // 33: api.v1.Timer.fired_at:type_name -> google.protobuf.Timestamp
-	145, // 34: api.v1.Timer.canceled_at:type_name -> google.protobuf.Timestamp
-	145, // 35: api.v1.Timer.expired_at:type_name -> google.protobuf.Timestamp
-	65,  // 36: api.v1.GetTimerResponse.timer:type_name -> api.v1.Timer
-	65,  // 37: api.v1.ListTimersResponse.timers:type_name -> api.v1.Timer
-	65,  // 38: api.v1.ListDueTimersResponse.timers:type_name -> api.v1.Timer
-	139, // 39: api.v1.Job.metadata:type_name -> api.v1.Job.MetadataEntry
-	145, // 40: api.v1.Job.created_at:type_name -> google.protobuf.Timestamp
-	145, // 41: api.v1.Job.claimed_at:type_name -> google.protobuf.Timestamp
-	145, // 42: api.v1.Job.completed_at:type_name -> google.protobuf.Timestamp
-	72,  // 43: api.v1.GetJobResponse.job:type_name -> api.v1.Job
-	72,  // 44: api.v1.ListJobsByRunResponse.jobs:type_name -> api.v1.Job
-	72,  // 45: api.v1.ListJobsByBatchResponse.jobs:type_name -> api.v1.Job
-	145, // 46: api.v1.Batch.submitted_at:type_name -> google.protobuf.Timestamp
-	145, // 47: api.v1.Batch.started_at:type_name -> google.protobuf.Timestamp
-	145, // 48: api.v1.Batch.completed_at:type_name -> google.protobuf.Timestamp
-	79,  // 49: api.v1.GetBatchResponse.batch:type_name -> api.v1.Batch
-	145, // 50: api.v1.Session.created_at:type_name -> google.protobuf.Timestamp
-	145, // 51: api.v1.Session.updated_at:type_name -> google.protobuf.Timestamp
-	145, // 52: api.v1.Session.last_used_at:type_name -> google.protobuf.Timestamp
-	145, // 53: api.v1.Session.expires_at:type_name -> google.protobuf.Timestamp
-	82,  // 54: api.v1.GetSessionResponse.session:type_name -> api.v1.Session
-	82,  // 55: api.v1.ListSessionsResponse.sessions:type_name -> api.v1.Session
-	145, // 56: api.v1.ChatMessage.scheduled_at:type_name -> google.protobuf.Timestamp
-	145, // 57: api.v1.ChatMessage.delivered_at:type_name -> google.protobuf.Timestamp
-	145, // 58: api.v1.ChatMessage.created_at:type_name -> google.protobuf.Timestamp
-	87,  // 59: api.v1.GetMessageResponse.message:type_name -> api.v1.ChatMessage
-	87,  // 60: api.v1.ListMessagesByCorrelationResponse.messages:type_name -> api.v1.ChatMessage
-	22,  // 61: api.v1.ListRunsResponse.items:type_name -> api.v1.Run
-	95,  // 62: api.v1.ListEventsResponse.items:type_name -> api.v1.EventSummary
-	140, // 63: api.v1.GetRunStatsResponse.count_by_status:type_name -> api.v1.GetRunStatsResponse.CountByStatusEntry
-	141, // 64: api.v1.GetRunStatsResponse.count_by_component_type:type_name -> api.v1.GetRunStatsResponse.CountByComponentTypeEntry
+	139, // 0: api.v1.Record.metadata:type_name -> api.v1.Record.MetadataEntry
+	10,  // 1: api.v1.AppendRequest.record:type_name -> api.v1.Record
+	10,  // 2: api.v1.AppendBatchRequest.records:type_name -> api.v1.Record
+	10,  // 3: api.v1.ReadByRunIDResponse.records:type_name -> api.v1.Record
+	10,  // 4: api.v1.FindByStepKeyResponse.record:type_name -> api.v1.Record
+	23,  // 5: api.v1.GetRunResponse.run:type_name -> api.v1.Run
+	146, // 6: api.v1.ListRoutingWorkersResponse.workers:type_name -> api.v1.WorkerInfo
+	147, // 7: api.v1.Run.submitted_at:type_name -> google.protobuf.Timestamp
+	147, // 8: api.v1.Run.started_at:type_name -> google.protobuf.Timestamp
+	147, // 9: api.v1.Run.completed_at:type_name -> google.protobuf.Timestamp
+	147, // 10: api.v1.Run.gateway_received_at:type_name -> google.protobuf.Timestamp
+	147, // 11: api.v1.Run.assigned_at:type_name -> google.protobuf.Timestamp
+	140, // 12: api.v1.Run.metadata:type_name -> api.v1.Run.MetadataEntry
+	148, // 13: api.v1.Run.priority:type_name -> api.v1.Priority
+	24,  // 14: api.v1.Run.model_usage:type_name -> api.v1.ModelUsage
+	10,  // 15: api.v1.TailResponse.record:type_name -> api.v1.Record
+	10,  // 16: api.v1.StoreRequest.records:type_name -> api.v1.Record
+	10,  // 17: api.v1.GetRecordsResponse.records:type_name -> api.v1.Record
+	37,  // 18: api.v1.HeartbeatRequest.partition_statuses:type_name -> api.v1.PartitionStatus
+	37,  // 19: api.v1.HeartbeatResponse.partition_statuses:type_name -> api.v1.PartitionStatus
+	10,  // 20: api.v1.ForwardAppendRequest.records:type_name -> api.v1.Record
+	147, // 21: api.v1.Approval.requested_at:type_name -> google.protobuf.Timestamp
+	147, // 22: api.v1.Approval.expires_at:type_name -> google.protobuf.Timestamp
+	147, // 23: api.v1.Approval.decided_at:type_name -> google.protobuf.Timestamp
+	54,  // 24: api.v1.GetApprovalResponse.approval:type_name -> api.v1.Approval
+	54,  // 25: api.v1.EngineListApprovalsResponse.approvals:type_name -> api.v1.Approval
+	147, // 26: api.v1.Signal.received_at:type_name -> google.protobuf.Timestamp
+	147, // 27: api.v1.Signal.acknowledged_at:type_name -> google.protobuf.Timestamp
+	147, // 28: api.v1.Signal.expires_at:type_name -> google.protobuf.Timestamp
+	59,  // 29: api.v1.GetSignalResponse.signal:type_name -> api.v1.Signal
+	59,  // 30: api.v1.LookupSignalResponse.signal:type_name -> api.v1.Signal
+	59,  // 31: api.v1.ListSignalsResponse.signals:type_name -> api.v1.Signal
+	147, // 32: api.v1.Timer.fire_at:type_name -> google.protobuf.Timestamp
+	147, // 33: api.v1.Timer.fired_at:type_name -> google.protobuf.Timestamp
+	147, // 34: api.v1.Timer.canceled_at:type_name -> google.protobuf.Timestamp
+	147, // 35: api.v1.Timer.expired_at:type_name -> google.protobuf.Timestamp
+	66,  // 36: api.v1.GetTimerResponse.timer:type_name -> api.v1.Timer
+	66,  // 37: api.v1.ListTimersResponse.timers:type_name -> api.v1.Timer
+	66,  // 38: api.v1.ListDueTimersResponse.timers:type_name -> api.v1.Timer
+	141, // 39: api.v1.Job.metadata:type_name -> api.v1.Job.MetadataEntry
+	147, // 40: api.v1.Job.created_at:type_name -> google.protobuf.Timestamp
+	147, // 41: api.v1.Job.claimed_at:type_name -> google.protobuf.Timestamp
+	147, // 42: api.v1.Job.completed_at:type_name -> google.protobuf.Timestamp
+	73,  // 43: api.v1.GetJobResponse.job:type_name -> api.v1.Job
+	73,  // 44: api.v1.ListJobsByRunResponse.jobs:type_name -> api.v1.Job
+	73,  // 45: api.v1.ListJobsByBatchResponse.jobs:type_name -> api.v1.Job
+	147, // 46: api.v1.Batch.submitted_at:type_name -> google.protobuf.Timestamp
+	147, // 47: api.v1.Batch.started_at:type_name -> google.protobuf.Timestamp
+	147, // 48: api.v1.Batch.completed_at:type_name -> google.protobuf.Timestamp
+	80,  // 49: api.v1.GetBatchResponse.batch:type_name -> api.v1.Batch
+	147, // 50: api.v1.Session.created_at:type_name -> google.protobuf.Timestamp
+	147, // 51: api.v1.Session.updated_at:type_name -> google.protobuf.Timestamp
+	147, // 52: api.v1.Session.last_used_at:type_name -> google.protobuf.Timestamp
+	147, // 53: api.v1.Session.expires_at:type_name -> google.protobuf.Timestamp
+	83,  // 54: api.v1.GetSessionResponse.session:type_name -> api.v1.Session
+	83,  // 55: api.v1.ListSessionsResponse.sessions:type_name -> api.v1.Session
+	147, // 56: api.v1.ChatMessage.scheduled_at:type_name -> google.protobuf.Timestamp
+	147, // 57: api.v1.ChatMessage.delivered_at:type_name -> google.protobuf.Timestamp
+	147, // 58: api.v1.ChatMessage.created_at:type_name -> google.protobuf.Timestamp
+	88,  // 59: api.v1.GetMessageResponse.message:type_name -> api.v1.ChatMessage
+	88,  // 60: api.v1.ListMessagesByCorrelationResponse.messages:type_name -> api.v1.ChatMessage
+	23,  // 61: api.v1.ListRunsResponse.items:type_name -> api.v1.Run
+	96,  // 62: api.v1.ListEventsResponse.items:type_name -> api.v1.EventSummary
+	142, // 63: api.v1.GetRunStatsResponse.count_by_status:type_name -> api.v1.GetRunStatsResponse.CountByStatusEntry
+	143, // 64: api.v1.GetRunStatsResponse.count_by_component_type:type_name -> api.v1.GetRunStatsResponse.CountByComponentTypeEntry
 	0,   // 65: api.v1.DurableStepCheckpoint.type:type_name -> api.v1.CheckpointType
-	99,  // 66: api.v1.CheckpointRequest.checkpoint:type_name -> api.v1.DurableStepCheckpoint
+	100, // 66: api.v1.CheckpointRequest.checkpoint:type_name -> api.v1.DurableStepCheckpoint
 	7,   // 67: api.v1.ActivationErrorDetail.code:type_name -> api.v1.ActivationErrorCode
-	103, // 68: api.v1.ActivationPayload.reference:type_name -> api.v1.ImmutablePayloadReference
-	104, // 69: api.v1.ActivationOutboxIntent.payload:type_name -> api.v1.ActivationPayload
-	104, // 70: api.v1.ActivationEvidence.payload:type_name -> api.v1.ActivationPayload
+	104, // 68: api.v1.ActivationPayload.reference:type_name -> api.v1.ImmutablePayloadReference
+	105, // 69: api.v1.ActivationOutboxIntent.payload:type_name -> api.v1.ActivationPayload
+	105, // 70: api.v1.ActivationEvidence.payload:type_name -> api.v1.ActivationPayload
 	4,   // 71: api.v1.ChildActivationLinkage.join_policy:type_name -> api.v1.ChildJoinPolicy
 	1,   // 72: api.v1.BeginActivationRequest.kind:type_name -> api.v1.ActivationKind
 	3,   // 73: api.v1.BeginActivationRequest.recovery_policy:type_name -> api.v1.ActivationRecoveryPolicy
-	109, // 74: api.v1.BeginActivationRequest.child:type_name -> api.v1.ChildActivationLinkage
+	110, // 74: api.v1.BeginActivationRequest.child:type_name -> api.v1.ChildActivationLinkage
 	7,   // 75: api.v1.ActivationConflictReceipt.error_code:type_name -> api.v1.ActivationErrorCode
-	104, // 76: api.v1.ActivationUnknownOutcomeReceipt.error_data:type_name -> api.v1.ActivationPayload
+	105, // 76: api.v1.ActivationUnknownOutcomeReceipt.error_data:type_name -> api.v1.ActivationPayload
 	2,   // 77: api.v1.BeginActivationResponse.outcome:type_name -> api.v1.BeginActivationOutcome
-	104, // 78: api.v1.BeginActivationResponse.replay_result:type_name -> api.v1.ActivationPayload
-	111, // 79: api.v1.BeginActivationResponse.conflict:type_name -> api.v1.ActivationConflictReceipt
-	112, // 80: api.v1.BeginActivationResponse.wait:type_name -> api.v1.ActivationWaitReceipt
-	113, // 81: api.v1.BeginActivationResponse.unknown_outcome:type_name -> api.v1.ActivationUnknownOutcomeReceipt
-	104, // 82: api.v1.CompleteActivationRequest.output:type_name -> api.v1.ActivationPayload
-	105, // 83: api.v1.CompleteActivationRequest.state_mutations:type_name -> api.v1.ActivationStateMutation
-	106, // 84: api.v1.CompleteActivationRequest.outbox_intents:type_name -> api.v1.ActivationOutboxIntent
-	107, // 85: api.v1.CompleteActivationRequest.usage:type_name -> api.v1.ActivationUsage
-	108, // 86: api.v1.CompleteActivationRequest.evidence:type_name -> api.v1.ActivationEvidence
-	104, // 87: api.v1.FailActivationRequest.error_data:type_name -> api.v1.ActivationPayload
+	105, // 78: api.v1.BeginActivationResponse.replay_result:type_name -> api.v1.ActivationPayload
+	112, // 79: api.v1.BeginActivationResponse.conflict:type_name -> api.v1.ActivationConflictReceipt
+	113, // 80: api.v1.BeginActivationResponse.wait:type_name -> api.v1.ActivationWaitReceipt
+	114, // 81: api.v1.BeginActivationResponse.unknown_outcome:type_name -> api.v1.ActivationUnknownOutcomeReceipt
+	105, // 82: api.v1.CompleteActivationRequest.output:type_name -> api.v1.ActivationPayload
+	106, // 83: api.v1.CompleteActivationRequest.state_mutations:type_name -> api.v1.ActivationStateMutation
+	107, // 84: api.v1.CompleteActivationRequest.outbox_intents:type_name -> api.v1.ActivationOutboxIntent
+	108, // 85: api.v1.CompleteActivationRequest.usage:type_name -> api.v1.ActivationUsage
+	109, // 86: api.v1.CompleteActivationRequest.evidence:type_name -> api.v1.ActivationEvidence
+	105, // 87: api.v1.FailActivationRequest.error_data:type_name -> api.v1.ActivationPayload
 	5,   // 88: api.v1.FailActivationRequest.external_outcome_certainty:type_name -> api.v1.ActivationExternalOutcomeCertainty
-	108, // 89: api.v1.FailActivationRequest.evidence:type_name -> api.v1.ActivationEvidence
+	109, // 89: api.v1.FailActivationRequest.evidence:type_name -> api.v1.ActivationEvidence
 	6,   // 90: api.v1.FailActivationResponse.status:type_name -> api.v1.ActivationStatus
-	130, // 91: api.v1.PollJobsResponse.jobs:type_name -> api.v1.JobAssignment
-	125, // 92: api.v1.RegisterWorkerSessionRequest.slot_policy:type_name -> api.v1.WorkerSlotPolicy
-	147, // 93: api.v1.RegisterWorkerSessionRequest.capabilities:type_name -> api.v1.WorkerCapability
-	148, // 94: api.v1.RegisterWorkerSessionRequest.components:type_name -> api.v1.ComponentInfo
-	125, // 95: api.v1.RegisterWorkerSessionResponse.effective_slot_policy:type_name -> api.v1.WorkerSlotPolicy
-	130, // 96: api.v1.PollJobResponse.job:type_name -> api.v1.JobAssignment
-	149, // 97: api.v1.JobAssignment.component_type:type_name -> api.v1.ComponentType
-	142, // 98: api.v1.JobAssignment.metadata:type_name -> api.v1.JobAssignment.MetadataEntry
-	150, // 99: api.v1.RenewJobLeaseRequest.mode:type_name -> api.v1.WorkerMode
-	8,   // 100: api.v1.RenewJobLeaseResponse.outcome:type_name -> api.v1.LeaseRenewalOutcome
-	143, // 101: api.v1.CompleteJobRequest.metadata:type_name -> api.v1.CompleteJobRequest.MetadataEntry
-	9,   // 102: api.v1.CompleteJobRequest.lifecycle_records:type_name -> api.v1.Record
-	10,  // 103: api.v1.EngineService.Append:input_type -> api.v1.AppendRequest
-	12,  // 104: api.v1.EngineService.AppendBatch:input_type -> api.v1.AppendBatchRequest
-	100, // 105: api.v1.EngineService.Checkpoint:input_type -> api.v1.CheckpointRequest
-	110, // 106: api.v1.EngineService.BeginActivation:input_type -> api.v1.BeginActivationRequest
-	115, // 107: api.v1.EngineService.CompleteActivation:input_type -> api.v1.CompleteActivationRequest
-	117, // 108: api.v1.EngineService.FailActivation:input_type -> api.v1.FailActivationRequest
-	119, // 109: api.v1.EngineService.SuspendActivation:input_type -> api.v1.SuspendActivationRequest
-	121, // 110: api.v1.EngineService.EventStream:input_type -> api.v1.EventStreamMessage
-	123, // 111: api.v1.EngineService.PollJobs:input_type -> api.v1.PollJobsRequest
-	126, // 112: api.v1.EngineService.RegisterWorkerSession:input_type -> api.v1.RegisterWorkerSessionRequest
-	128, // 113: api.v1.EngineService.PollJob:input_type -> api.v1.PollJobRequest
-	131, // 114: api.v1.EngineService.RenewJobLease:input_type -> api.v1.RenewJobLeaseRequest
-	133, // 115: api.v1.EngineService.ReportWorkerCapacity:input_type -> api.v1.ReportWorkerCapacityRequest
-	135, // 116: api.v1.EngineService.CompleteJob:input_type -> api.v1.CompleteJobRequest
-	14,  // 117: api.v1.EngineService.ReadByRunID:input_type -> api.v1.ReadByRunIDRequest
-	16,  // 118: api.v1.EngineService.FindByStepKey:input_type -> api.v1.FindByStepKeyRequest
-	18,  // 119: api.v1.EngineService.GetRun:input_type -> api.v1.GetRunRequest
-	20,  // 120: api.v1.EngineService.ListRoutingWorkers:input_type -> api.v1.ListRoutingWorkersRequest
-	24,  // 121: api.v1.EngineService.Tail:input_type -> api.v1.TailRequest
-	49,  // 122: api.v1.EngineService.GetEntityState:input_type -> api.v1.GetEntityStateRequest
-	51,  // 123: api.v1.EngineService.PutEntityState:input_type -> api.v1.PutEntityStateRequest
-	54,  // 124: api.v1.EngineService.GetApproval:input_type -> api.v1.GetApprovalRequest
-	56,  // 125: api.v1.EngineService.ListApprovals:input_type -> api.v1.EngineListApprovalsRequest
-	59,  // 126: api.v1.EngineService.GetSignal:input_type -> api.v1.GetSignalRequest
-	61,  // 127: api.v1.EngineService.LookupSignal:input_type -> api.v1.LookupSignalRequest
-	63,  // 128: api.v1.EngineService.ListSignals:input_type -> api.v1.ListSignalsRequest
-	66,  // 129: api.v1.EngineService.GetTimer:input_type -> api.v1.GetTimerRequest
-	68,  // 130: api.v1.EngineService.ListTimers:input_type -> api.v1.ListTimersRequest
-	70,  // 131: api.v1.EngineService.ListDueTimers:input_type -> api.v1.ListDueTimersRequest
-	73,  // 132: api.v1.EngineService.GetJob:input_type -> api.v1.GetJobRequest
-	75,  // 133: api.v1.EngineService.ListJobsByRun:input_type -> api.v1.ListJobsByRunRequest
-	77,  // 134: api.v1.EngineService.ListJobsByBatch:input_type -> api.v1.ListJobsByBatchRequest
-	80,  // 135: api.v1.EngineService.GetBatch:input_type -> api.v1.GetBatchRequest
-	83,  // 136: api.v1.EngineService.GetSession:input_type -> api.v1.GetSessionRequest
-	85,  // 137: api.v1.EngineService.ListSessions:input_type -> api.v1.ListSessionsRequest
-	88,  // 138: api.v1.EngineService.GetMessage:input_type -> api.v1.GetMessageRequest
-	90,  // 139: api.v1.EngineService.ListMessagesByCorrelation:input_type -> api.v1.ListMessagesByCorrelationRequest
-	92,  // 140: api.v1.EngineService.ListRuns:input_type -> api.v1.ListRunsRequest
-	97,  // 141: api.v1.EngineService.GetRunStats:input_type -> api.v1.GetRunStatsRequest
-	94,  // 142: api.v1.EngineService.ListEvents:input_type -> api.v1.ListEventsRequest
-	26,  // 143: api.v1.EngineService.GetStatus:input_type -> api.v1.GetStatusRequest
-	28,  // 144: api.v1.ReplicationService.Store:input_type -> api.v1.StoreRequest
-	30,  // 145: api.v1.ReplicationService.GetRecords:input_type -> api.v1.GetRecordsRequest
-	32,  // 146: api.v1.ReplicationService.Seal:input_type -> api.v1.SealRequest
-	34,  // 147: api.v1.ReplicationService.Heartbeat:input_type -> api.v1.HeartbeatRequest
-	37,  // 148: api.v1.ReplicationService.RequestVote:input_type -> api.v1.VoteRequest
-	39,  // 149: api.v1.ReplicationService.AnnounceLeader:input_type -> api.v1.AnnounceLeaderRequest
-	41,  // 150: api.v1.ReplicationService.ForwardAppend:input_type -> api.v1.ForwardAppendRequest
-	41,  // 151: api.v1.ReplicationService.ForwardAppendV2:input_type -> api.v1.ForwardAppendRequest
-	43,  // 152: api.v1.ReplicationService.AddMember:input_type -> api.v1.AddMemberRequest
-	45,  // 153: api.v1.ReplicationService.RemoveMember:input_type -> api.v1.RemoveMemberRequest
-	47,  // 154: api.v1.ReplicationService.TransferLeadership:input_type -> api.v1.TransferLeadershipRequest
-	11,  // 155: api.v1.EngineService.Append:output_type -> api.v1.AppendResponse
-	13,  // 156: api.v1.EngineService.AppendBatch:output_type -> api.v1.AppendBatchResponse
-	101, // 157: api.v1.EngineService.Checkpoint:output_type -> api.v1.CheckpointResponse
-	114, // 158: api.v1.EngineService.BeginActivation:output_type -> api.v1.BeginActivationResponse
-	116, // 159: api.v1.EngineService.CompleteActivation:output_type -> api.v1.CompleteActivationResponse
-	118, // 160: api.v1.EngineService.FailActivation:output_type -> api.v1.FailActivationResponse
-	120, // 161: api.v1.EngineService.SuspendActivation:output_type -> api.v1.SuspendActivationResponse
-	122, // 162: api.v1.EngineService.EventStream:output_type -> api.v1.EventStreamAck
-	124, // 163: api.v1.EngineService.PollJobs:output_type -> api.v1.PollJobsResponse
-	127, // 164: api.v1.EngineService.RegisterWorkerSession:output_type -> api.v1.RegisterWorkerSessionResponse
-	129, // 165: api.v1.EngineService.PollJob:output_type -> api.v1.PollJobResponse
-	132, // 166: api.v1.EngineService.RenewJobLease:output_type -> api.v1.RenewJobLeaseResponse
-	134, // 167: api.v1.EngineService.ReportWorkerCapacity:output_type -> api.v1.ReportWorkerCapacityResponse
-	136, // 168: api.v1.EngineService.CompleteJob:output_type -> api.v1.CompleteJobResponse
-	15,  // 169: api.v1.EngineService.ReadByRunID:output_type -> api.v1.ReadByRunIDResponse
-	17,  // 170: api.v1.EngineService.FindByStepKey:output_type -> api.v1.FindByStepKeyResponse
-	19,  // 171: api.v1.EngineService.GetRun:output_type -> api.v1.GetRunResponse
-	21,  // 172: api.v1.EngineService.ListRoutingWorkers:output_type -> api.v1.ListRoutingWorkersResponse
-	25,  // 173: api.v1.EngineService.Tail:output_type -> api.v1.TailResponse
-	50,  // 174: api.v1.EngineService.GetEntityState:output_type -> api.v1.GetEntityStateResponse
-	52,  // 175: api.v1.EngineService.PutEntityState:output_type -> api.v1.PutEntityStateResponse
-	55,  // 176: api.v1.EngineService.GetApproval:output_type -> api.v1.GetApprovalResponse
-	57,  // 177: api.v1.EngineService.ListApprovals:output_type -> api.v1.EngineListApprovalsResponse
-	60,  // 178: api.v1.EngineService.GetSignal:output_type -> api.v1.GetSignalResponse
-	62,  // 179: api.v1.EngineService.LookupSignal:output_type -> api.v1.LookupSignalResponse
-	64,  // 180: api.v1.EngineService.ListSignals:output_type -> api.v1.ListSignalsResponse
-	67,  // 181: api.v1.EngineService.GetTimer:output_type -> api.v1.GetTimerResponse
-	69,  // 182: api.v1.EngineService.ListTimers:output_type -> api.v1.ListTimersResponse
-	71,  // 183: api.v1.EngineService.ListDueTimers:output_type -> api.v1.ListDueTimersResponse
-	74,  // 184: api.v1.EngineService.GetJob:output_type -> api.v1.GetJobResponse
-	76,  // 185: api.v1.EngineService.ListJobsByRun:output_type -> api.v1.ListJobsByRunResponse
-	78,  // 186: api.v1.EngineService.ListJobsByBatch:output_type -> api.v1.ListJobsByBatchResponse
-	81,  // 187: api.v1.EngineService.GetBatch:output_type -> api.v1.GetBatchResponse
-	84,  // 188: api.v1.EngineService.GetSession:output_type -> api.v1.GetSessionResponse
-	86,  // 189: api.v1.EngineService.ListSessions:output_type -> api.v1.ListSessionsResponse
-	89,  // 190: api.v1.EngineService.GetMessage:output_type -> api.v1.GetMessageResponse
-	91,  // 191: api.v1.EngineService.ListMessagesByCorrelation:output_type -> api.v1.ListMessagesByCorrelationResponse
-	93,  // 192: api.v1.EngineService.ListRuns:output_type -> api.v1.ListRunsResponse
-	98,  // 193: api.v1.EngineService.GetRunStats:output_type -> api.v1.GetRunStatsResponse
-	96,  // 194: api.v1.EngineService.ListEvents:output_type -> api.v1.ListEventsResponse
-	27,  // 195: api.v1.EngineService.GetStatus:output_type -> api.v1.GetStatusResponse
-	29,  // 196: api.v1.ReplicationService.Store:output_type -> api.v1.StoreResponse
-	31,  // 197: api.v1.ReplicationService.GetRecords:output_type -> api.v1.GetRecordsResponse
-	33,  // 198: api.v1.ReplicationService.Seal:output_type -> api.v1.SealResponse
-	35,  // 199: api.v1.ReplicationService.Heartbeat:output_type -> api.v1.HeartbeatResponse
-	38,  // 200: api.v1.ReplicationService.RequestVote:output_type -> api.v1.VoteResponse
-	40,  // 201: api.v1.ReplicationService.AnnounceLeader:output_type -> api.v1.AnnounceLeaderResponse
-	42,  // 202: api.v1.ReplicationService.ForwardAppend:output_type -> api.v1.ForwardAppendResponse
-	42,  // 203: api.v1.ReplicationService.ForwardAppendV2:output_type -> api.v1.ForwardAppendResponse
-	44,  // 204: api.v1.ReplicationService.AddMember:output_type -> api.v1.AddMemberResponse
-	46,  // 205: api.v1.ReplicationService.RemoveMember:output_type -> api.v1.RemoveMemberResponse
-	48,  // 206: api.v1.ReplicationService.TransferLeadership:output_type -> api.v1.TransferLeadershipResponse
-	155, // [155:207] is the sub-list for method output_type
-	103, // [103:155] is the sub-list for method input_type
-	103, // [103:103] is the sub-list for extension type_name
-	103, // [103:103] is the sub-list for extension extendee
-	0,   // [0:103] is the sub-list for field type_name
+	132, // 91: api.v1.PollJobsResponse.jobs:type_name -> api.v1.JobAssignment
+	126, // 92: api.v1.RegisterWorkerSessionRequest.slot_policy:type_name -> api.v1.WorkerSlotPolicy
+	149, // 93: api.v1.RegisterWorkerSessionRequest.capabilities:type_name -> api.v1.WorkerCapability
+	150, // 94: api.v1.RegisterWorkerSessionRequest.components:type_name -> api.v1.ComponentInfo
+	126, // 95: api.v1.RegisterWorkerSessionResponse.effective_slot_policy:type_name -> api.v1.WorkerSlotPolicy
+	8,   // 96: api.v1.SlotScalingHint.decision:type_name -> api.v1.SlotScalingDecision
+	132, // 97: api.v1.PollJobResponse.job:type_name -> api.v1.JobAssignment
+	130, // 98: api.v1.PollJobResponse.slot_scaling:type_name -> api.v1.SlotScalingHint
+	151, // 99: api.v1.JobAssignment.component_type:type_name -> api.v1.ComponentType
+	144, // 100: api.v1.JobAssignment.metadata:type_name -> api.v1.JobAssignment.MetadataEntry
+	152, // 101: api.v1.RenewJobLeaseRequest.mode:type_name -> api.v1.WorkerMode
+	9,   // 102: api.v1.RenewJobLeaseResponse.outcome:type_name -> api.v1.LeaseRenewalOutcome
+	145, // 103: api.v1.CompleteJobRequest.metadata:type_name -> api.v1.CompleteJobRequest.MetadataEntry
+	10,  // 104: api.v1.CompleteJobRequest.lifecycle_records:type_name -> api.v1.Record
+	11,  // 105: api.v1.EngineService.Append:input_type -> api.v1.AppendRequest
+	13,  // 106: api.v1.EngineService.AppendBatch:input_type -> api.v1.AppendBatchRequest
+	101, // 107: api.v1.EngineService.Checkpoint:input_type -> api.v1.CheckpointRequest
+	111, // 108: api.v1.EngineService.BeginActivation:input_type -> api.v1.BeginActivationRequest
+	116, // 109: api.v1.EngineService.CompleteActivation:input_type -> api.v1.CompleteActivationRequest
+	118, // 110: api.v1.EngineService.FailActivation:input_type -> api.v1.FailActivationRequest
+	120, // 111: api.v1.EngineService.SuspendActivation:input_type -> api.v1.SuspendActivationRequest
+	122, // 112: api.v1.EngineService.EventStream:input_type -> api.v1.EventStreamMessage
+	124, // 113: api.v1.EngineService.PollJobs:input_type -> api.v1.PollJobsRequest
+	127, // 114: api.v1.EngineService.RegisterWorkerSession:input_type -> api.v1.RegisterWorkerSessionRequest
+	129, // 115: api.v1.EngineService.PollJob:input_type -> api.v1.PollJobRequest
+	133, // 116: api.v1.EngineService.RenewJobLease:input_type -> api.v1.RenewJobLeaseRequest
+	135, // 117: api.v1.EngineService.ReportWorkerCapacity:input_type -> api.v1.ReportWorkerCapacityRequest
+	137, // 118: api.v1.EngineService.CompleteJob:input_type -> api.v1.CompleteJobRequest
+	15,  // 119: api.v1.EngineService.ReadByRunID:input_type -> api.v1.ReadByRunIDRequest
+	17,  // 120: api.v1.EngineService.FindByStepKey:input_type -> api.v1.FindByStepKeyRequest
+	19,  // 121: api.v1.EngineService.GetRun:input_type -> api.v1.GetRunRequest
+	21,  // 122: api.v1.EngineService.ListRoutingWorkers:input_type -> api.v1.ListRoutingWorkersRequest
+	25,  // 123: api.v1.EngineService.Tail:input_type -> api.v1.TailRequest
+	50,  // 124: api.v1.EngineService.GetEntityState:input_type -> api.v1.GetEntityStateRequest
+	52,  // 125: api.v1.EngineService.PutEntityState:input_type -> api.v1.PutEntityStateRequest
+	55,  // 126: api.v1.EngineService.GetApproval:input_type -> api.v1.GetApprovalRequest
+	57,  // 127: api.v1.EngineService.ListApprovals:input_type -> api.v1.EngineListApprovalsRequest
+	60,  // 128: api.v1.EngineService.GetSignal:input_type -> api.v1.GetSignalRequest
+	62,  // 129: api.v1.EngineService.LookupSignal:input_type -> api.v1.LookupSignalRequest
+	64,  // 130: api.v1.EngineService.ListSignals:input_type -> api.v1.ListSignalsRequest
+	67,  // 131: api.v1.EngineService.GetTimer:input_type -> api.v1.GetTimerRequest
+	69,  // 132: api.v1.EngineService.ListTimers:input_type -> api.v1.ListTimersRequest
+	71,  // 133: api.v1.EngineService.ListDueTimers:input_type -> api.v1.ListDueTimersRequest
+	74,  // 134: api.v1.EngineService.GetJob:input_type -> api.v1.GetJobRequest
+	76,  // 135: api.v1.EngineService.ListJobsByRun:input_type -> api.v1.ListJobsByRunRequest
+	78,  // 136: api.v1.EngineService.ListJobsByBatch:input_type -> api.v1.ListJobsByBatchRequest
+	81,  // 137: api.v1.EngineService.GetBatch:input_type -> api.v1.GetBatchRequest
+	84,  // 138: api.v1.EngineService.GetSession:input_type -> api.v1.GetSessionRequest
+	86,  // 139: api.v1.EngineService.ListSessions:input_type -> api.v1.ListSessionsRequest
+	89,  // 140: api.v1.EngineService.GetMessage:input_type -> api.v1.GetMessageRequest
+	91,  // 141: api.v1.EngineService.ListMessagesByCorrelation:input_type -> api.v1.ListMessagesByCorrelationRequest
+	93,  // 142: api.v1.EngineService.ListRuns:input_type -> api.v1.ListRunsRequest
+	98,  // 143: api.v1.EngineService.GetRunStats:input_type -> api.v1.GetRunStatsRequest
+	95,  // 144: api.v1.EngineService.ListEvents:input_type -> api.v1.ListEventsRequest
+	27,  // 145: api.v1.EngineService.GetStatus:input_type -> api.v1.GetStatusRequest
+	29,  // 146: api.v1.ReplicationService.Store:input_type -> api.v1.StoreRequest
+	31,  // 147: api.v1.ReplicationService.GetRecords:input_type -> api.v1.GetRecordsRequest
+	33,  // 148: api.v1.ReplicationService.Seal:input_type -> api.v1.SealRequest
+	35,  // 149: api.v1.ReplicationService.Heartbeat:input_type -> api.v1.HeartbeatRequest
+	38,  // 150: api.v1.ReplicationService.RequestVote:input_type -> api.v1.VoteRequest
+	40,  // 151: api.v1.ReplicationService.AnnounceLeader:input_type -> api.v1.AnnounceLeaderRequest
+	42,  // 152: api.v1.ReplicationService.ForwardAppend:input_type -> api.v1.ForwardAppendRequest
+	42,  // 153: api.v1.ReplicationService.ForwardAppendV2:input_type -> api.v1.ForwardAppendRequest
+	44,  // 154: api.v1.ReplicationService.AddMember:input_type -> api.v1.AddMemberRequest
+	46,  // 155: api.v1.ReplicationService.RemoveMember:input_type -> api.v1.RemoveMemberRequest
+	48,  // 156: api.v1.ReplicationService.TransferLeadership:input_type -> api.v1.TransferLeadershipRequest
+	12,  // 157: api.v1.EngineService.Append:output_type -> api.v1.AppendResponse
+	14,  // 158: api.v1.EngineService.AppendBatch:output_type -> api.v1.AppendBatchResponse
+	102, // 159: api.v1.EngineService.Checkpoint:output_type -> api.v1.CheckpointResponse
+	115, // 160: api.v1.EngineService.BeginActivation:output_type -> api.v1.BeginActivationResponse
+	117, // 161: api.v1.EngineService.CompleteActivation:output_type -> api.v1.CompleteActivationResponse
+	119, // 162: api.v1.EngineService.FailActivation:output_type -> api.v1.FailActivationResponse
+	121, // 163: api.v1.EngineService.SuspendActivation:output_type -> api.v1.SuspendActivationResponse
+	123, // 164: api.v1.EngineService.EventStream:output_type -> api.v1.EventStreamAck
+	125, // 165: api.v1.EngineService.PollJobs:output_type -> api.v1.PollJobsResponse
+	128, // 166: api.v1.EngineService.RegisterWorkerSession:output_type -> api.v1.RegisterWorkerSessionResponse
+	131, // 167: api.v1.EngineService.PollJob:output_type -> api.v1.PollJobResponse
+	134, // 168: api.v1.EngineService.RenewJobLease:output_type -> api.v1.RenewJobLeaseResponse
+	136, // 169: api.v1.EngineService.ReportWorkerCapacity:output_type -> api.v1.ReportWorkerCapacityResponse
+	138, // 170: api.v1.EngineService.CompleteJob:output_type -> api.v1.CompleteJobResponse
+	16,  // 171: api.v1.EngineService.ReadByRunID:output_type -> api.v1.ReadByRunIDResponse
+	18,  // 172: api.v1.EngineService.FindByStepKey:output_type -> api.v1.FindByStepKeyResponse
+	20,  // 173: api.v1.EngineService.GetRun:output_type -> api.v1.GetRunResponse
+	22,  // 174: api.v1.EngineService.ListRoutingWorkers:output_type -> api.v1.ListRoutingWorkersResponse
+	26,  // 175: api.v1.EngineService.Tail:output_type -> api.v1.TailResponse
+	51,  // 176: api.v1.EngineService.GetEntityState:output_type -> api.v1.GetEntityStateResponse
+	53,  // 177: api.v1.EngineService.PutEntityState:output_type -> api.v1.PutEntityStateResponse
+	56,  // 178: api.v1.EngineService.GetApproval:output_type -> api.v1.GetApprovalResponse
+	58,  // 179: api.v1.EngineService.ListApprovals:output_type -> api.v1.EngineListApprovalsResponse
+	61,  // 180: api.v1.EngineService.GetSignal:output_type -> api.v1.GetSignalResponse
+	63,  // 181: api.v1.EngineService.LookupSignal:output_type -> api.v1.LookupSignalResponse
+	65,  // 182: api.v1.EngineService.ListSignals:output_type -> api.v1.ListSignalsResponse
+	68,  // 183: api.v1.EngineService.GetTimer:output_type -> api.v1.GetTimerResponse
+	70,  // 184: api.v1.EngineService.ListTimers:output_type -> api.v1.ListTimersResponse
+	72,  // 185: api.v1.EngineService.ListDueTimers:output_type -> api.v1.ListDueTimersResponse
+	75,  // 186: api.v1.EngineService.GetJob:output_type -> api.v1.GetJobResponse
+	77,  // 187: api.v1.EngineService.ListJobsByRun:output_type -> api.v1.ListJobsByRunResponse
+	79,  // 188: api.v1.EngineService.ListJobsByBatch:output_type -> api.v1.ListJobsByBatchResponse
+	82,  // 189: api.v1.EngineService.GetBatch:output_type -> api.v1.GetBatchResponse
+	85,  // 190: api.v1.EngineService.GetSession:output_type -> api.v1.GetSessionResponse
+	87,  // 191: api.v1.EngineService.ListSessions:output_type -> api.v1.ListSessionsResponse
+	90,  // 192: api.v1.EngineService.GetMessage:output_type -> api.v1.GetMessageResponse
+	92,  // 193: api.v1.EngineService.ListMessagesByCorrelation:output_type -> api.v1.ListMessagesByCorrelationResponse
+	94,  // 194: api.v1.EngineService.ListRuns:output_type -> api.v1.ListRunsResponse
+	99,  // 195: api.v1.EngineService.GetRunStats:output_type -> api.v1.GetRunStatsResponse
+	97,  // 196: api.v1.EngineService.ListEvents:output_type -> api.v1.ListEventsResponse
+	28,  // 197: api.v1.EngineService.GetStatus:output_type -> api.v1.GetStatusResponse
+	30,  // 198: api.v1.ReplicationService.Store:output_type -> api.v1.StoreResponse
+	32,  // 199: api.v1.ReplicationService.GetRecords:output_type -> api.v1.GetRecordsResponse
+	34,  // 200: api.v1.ReplicationService.Seal:output_type -> api.v1.SealResponse
+	36,  // 201: api.v1.ReplicationService.Heartbeat:output_type -> api.v1.HeartbeatResponse
+	39,  // 202: api.v1.ReplicationService.RequestVote:output_type -> api.v1.VoteResponse
+	41,  // 203: api.v1.ReplicationService.AnnounceLeader:output_type -> api.v1.AnnounceLeaderResponse
+	43,  // 204: api.v1.ReplicationService.ForwardAppend:output_type -> api.v1.ForwardAppendResponse
+	43,  // 205: api.v1.ReplicationService.ForwardAppendV2:output_type -> api.v1.ForwardAppendResponse
+	45,  // 206: api.v1.ReplicationService.AddMember:output_type -> api.v1.AddMemberResponse
+	47,  // 207: api.v1.ReplicationService.RemoveMember:output_type -> api.v1.RemoveMemberResponse
+	49,  // 208: api.v1.ReplicationService.TransferLeadership:output_type -> api.v1.TransferLeadershipResponse
+	157, // [157:209] is the sub-list for method output_type
+	105, // [105:157] is the sub-list for method input_type
+	105, // [105:105] is the sub-list for extension type_name
+	105, // [105:105] is the sub-list for extension extendee
+	0,   // [0:105] is the sub-list for field type_name
 }
 
 func init() { file_api_v1_engine_proto_init() }
@@ -12121,15 +12248,15 @@ func file_api_v1_engine_proto_init() {
 		(*ActivationPayload_Reference)(nil),
 	}
 	file_api_v1_engine_proto_msgTypes[114].OneofWrappers = []any{}
-	file_api_v1_engine_proto_msgTypes[122].OneofWrappers = []any{}
-	file_api_v1_engine_proto_msgTypes[126].OneofWrappers = []any{}
+	file_api_v1_engine_proto_msgTypes[123].OneofWrappers = []any{}
+	file_api_v1_engine_proto_msgTypes[127].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_api_v1_engine_proto_rawDesc), len(file_api_v1_engine_proto_rawDesc)),
-			NumEnums:      9,
-			NumMessages:   135,
+			NumEnums:      10,
+			NumMessages:   136,
 			NumExtensions: 0,
 			NumServices:   2,
 		},
