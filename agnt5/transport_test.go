@@ -836,6 +836,7 @@ func TestWorkerRunDialsConfiguredEndpoint(t *testing.T) {
 	}
 	listener := newTestCoordinatorListener(t, server)
 	worker := NewWorker("svc",
+		WithWorkerMode(WorkerModePush),
 		WithWorkerID("worker-1"),
 		WithCoordinatorEndpoint("http://bufnet"),
 		withGRPCDialOptions(grpc.WithContextDialer(testBufconnDialer(listener))),

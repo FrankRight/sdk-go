@@ -176,7 +176,7 @@ func newWorkerID() string {
 
 func workerModeFromEnv() WorkerMode {
 	switch WorkerMode(os.Getenv(envWorkerMode)) {
-	case WorkerModePull:
+	case "", WorkerModePull:
 		return WorkerModePull
 	default:
 		return WorkerModePush
@@ -203,6 +203,7 @@ func uint32FromEnvDefault(name string, fallback uint32) uint32 {
 }
 
 func (w *Worker) syncRuntimeMetadata() {
+	w.metadata[envWorkerMode] = string(w.workerMode)
 	if w.projectID != "" {
 		w.metadata["project_id"] = w.projectID
 		w.metadata["AGNT5_PROJECT_ID"] = w.projectID
@@ -298,7 +299,8 @@ func (w *Worker) Components() []ComponentInfo {
 	return w.registry.ComponentInfos()
 }
 
-// Run connects this worker to AGNT5 and starts the push-mode worker stream.
+// Run connects this worker to AGNT5 and starts pull assignment by default,
+// or the coordinator stream when push mode is explicitly configured.
 func (w *Worker) Run(ctx context.Context) error {
 	if ctx == nil {
 		ctx = context.Background()

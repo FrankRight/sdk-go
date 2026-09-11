@@ -57,6 +57,9 @@ func TestNewWorkerDefaultsAndOptions(t *testing.T) {
 	if worker.DeploymentID() != "dep-1" {
 		t.Fatalf("deployment id: %q", worker.DeploymentID())
 	}
+	if worker.Metadata()[envWorkerMode] != "push" {
+		t.Fatal("explicit push must be reported in metadata")
+	}
 	if worker.WorkerMode() != WorkerModePush {
 		t.Fatalf("worker mode: %q", worker.WorkerMode())
 	}
@@ -315,5 +318,25 @@ func TestInvocationEventMetadataCannotOverrideExecutionAuthority(t *testing.T) {
 	}
 	if got := metadata["custom"]; got != "preserved" {
 		t.Fatalf("custom = %q, want preserved", got)
+	}
+}
+
+func TestWorkerModeDefaultAndExplicitModes(t *testing.T) {
+	for _, mode := range []string{"", "pull", "push"} {
+		t.Run(mode, func(t *testing.T) {
+			t.Setenv(envWorkerMode, mode)
+			want := WorkerModePull
+			if mode == "push" {
+				want = WorkerModePush
+			}
+			worker := NewWorker("svc")
+			if got := worker.WorkerMode(); got != want {
+				t.Fatalf("mode = %q, want %q", got, want)
+			}
+			registration := worker.registerService()
+			if registration.GetMode() != protoWorkerMode(want) || registration.GetMetadata()[envWorkerMode] != string(want) {
+				t.Fatalf("registration does not report resolved mode: %v", registration)
+			}
+		})
 	}
 }

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"reflect"
 	"strings"
 	"sync"
@@ -315,7 +316,11 @@ func (s *testEngine) ReportWorkerCapacity(_ context.Context, req *pb.ReportWorke
 	return &pb.ReportWorkerCapacityResponse{Accepted: true, RecordedAtMs: sourceTimestampNS(0) / int64(time.Millisecond)}, nil
 }
 
-func TestWorkerRunPullCompletesPolledJob(t *testing.T) {
+func TestWorkerRunDefaultsToPullAndCompletesPolledJob(t *testing.T) {
+	t.Setenv(envWorkerMode, "")
+	if err := os.Unsetenv(envWorkerMode); err != nil {
+		t.Fatal(err)
+	}
 	server := &testEngine{
 		job: &pb.JobAssignment{
 			JobId:         "run-pull",
@@ -338,7 +343,6 @@ func TestWorkerRunPullCompletesPolledJob(t *testing.T) {
 		WithWorkerID("worker-pull"),
 		WithProjectID("proj-1"),
 		WithDeploymentID("dep-1"),
-		WithWorkerMode(WorkerModePull),
 		WithCoordinatorEndpoint("http://bufnet"),
 		WithMaxConcurrency(2),
 		withGRPCDialOptions(grpc.WithContextDialer(testBufconnDialer(listener))),
