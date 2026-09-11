@@ -7,6 +7,8 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-09-11
+
 ### Fixed
 
 - Include canonical `agnt5.app_name` alongside the existing application-name resource attribute in OTLP logs (AGNT5-1079).
@@ -15,8 +17,7 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 - Workers now default to `pull` when `AGNT5_WORKER_MODE` is unset or empty.
   Explicit `push` remains supported; set it before upgrading if your worker
-  relies on coordinator-push dispatch. Schedule this compatibility change for
-  the next minor release (0.8.0; AGNT5-1100).
+  relies on coordinator-push dispatch (AGNT5-1100).
 
 ## [0.7.1] - 2026-09-08
 
