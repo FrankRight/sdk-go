@@ -85,6 +85,7 @@ func telemetryResource(w *Worker) *resource.Resource {
 		attribute.String("service.namespace", "agnt5"),
 		attribute.String("service.version", w.serviceVersion),
 		attribute.String("agnt5.app.name", w.serviceName),
+		attribute.String("agnt5.app_name", w.serviceName),
 		attribute.String("agnt5.worker.id", w.workerID),
 		attribute.String("service.instance.id", w.workerID),
 	}

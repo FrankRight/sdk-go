@@ -55,7 +55,7 @@ func TestApplicationLogsExportRunAndResourceAttributes(t *testing.T) {
 	for key, want := range map[string]string{
 		"service.name":        "agnt5-worker",
 		"service.namespace":   "agnt5",
-		"agnt5.app.name":      "research-service",
+		"agnt5.app_name":      "research-service",
 		"agnt5.worker.id":     "worker-1",
 		"service.instance.id": "worker-1",
 		"agnt5.project.id":    "project-1",

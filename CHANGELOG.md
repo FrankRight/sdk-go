@@ -7,6 +7,10 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+### Fixed
+
+- Include canonical `agnt5.app_name` alongside the existing application-name resource attribute in OTLP logs (AGNT5-1079).
+
 ### Changed
 
 - Workers now default to `pull` when `AGNT5_WORKER_MODE` is unset or empty.
