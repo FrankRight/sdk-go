@@ -84,7 +84,8 @@ func WithWorkspaceID(workspaceID string) WorkerOption {
 	}
 }
 
-// WithWorkerMode sets push or pull assignment mode.
+// WithWorkerMode overrides AGNT5_WORKER_MODE. Unspecified workers default to pull;
+// use WorkerModePush to retain coordinator-push dispatch.
 func WithWorkerMode(mode WorkerMode) WorkerOption {
 	return func(w *Worker) {
 		switch mode {
