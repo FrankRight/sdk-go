@@ -2,6 +2,8 @@ package agnt5
 
 import (
 	"context"
+	"io"
+	"log/slog"
 	"sync"
 	"testing"
 
@@ -131,4 +133,34 @@ func resourceAttributes(record sdklog.Record) map[string]string {
 		attrs[string(attr.Key)] = attr.Value.AsString()
 	}
 	return attrs
+}
+
+func TestInvocationForwardsStandardContextLogs(t *testing.T) {
+	exporter := &recordingLogExporter{}
+	worker := NewWorker("service", WithWorkerID("worker-1"))
+	worker.telemetry = newTelemetry(worker, exporter)
+	defer worker.shutdownTelemetry()
+	if err := RegisterFunction(worker, "log", func(ctx *Context, input string) (string, error) {
+		derived, cancel := context.WithCancel(ctx.Context)
+		defer cancel()
+		slog.New(NewSlogHandler(slog.NewTextHandler(io.Discard, nil))).InfoContext(derived, "standard application log", "input", input)
+		return input, nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := worker.invoke(context.Background(), Invocation{
+		ID: "invocation-1", RunID: "run-1", ComponentName: "log", Input: []byte(`"hello"`),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := worker.telemetry.provider.ForceFlush(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	records := exporter.Records()
+	if len(records) != 1 {
+		t.Fatalf("standard context log records = %d, want 1", len(records))
+	}
+	if got := recordAttributes(records[0])["agnt5.run.id"]; got != "run-1" {
+		t.Fatalf("standard log run = %q, want run-1", got)
+	}
 }

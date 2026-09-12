@@ -7,6 +7,19 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-09-12
+
+### Added
+
+- Context-aware `NewSlogHandler` forwarding, preserving the application's local
+  handler, groups, and level filtering (AGNT5-1079).
+- OTLP invocation, step, and model spans with run and log correlation; preserve
+  W3C parents and runtime pull-job trace IDs, record handler errors/panics, and
+  drain logs and traces together during worker shutdown (AGNT5-1079).
+- Enable trace export when a shared or trace-specific OTLP endpoint is set;
+  include canonical workspace/project/deployment tags on every span. Built-in
+  judge models and nested panics retain their trace attribution (AGNT5-1079).
+
 ## [0.8.0] - 2026-09-11
 
 ### Fixed

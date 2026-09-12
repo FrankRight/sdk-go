@@ -152,7 +152,7 @@ func stepScope(ctx *Context, stepContext context.Context) *Context {
 	return ctx
 }
 
-func runStep[T any](ctx *Context, name, explicitKey string, input any, fn func(context.Context, string) (T, error)) (T, error) {
+func runStep[T any](ctx *Context, name, explicitKey string, input any, fn func(context.Context, string) (T, error)) (out T, err error) {
 	var zero T
 	if ctx == nil {
 		return zero, context.Canceled
@@ -163,6 +163,8 @@ func runStep[T any](ctx *Context, name, explicitKey string, input any, fn func(c
 	if strings.TrimSpace(name) == "" {
 		return zero, ErrInvalidStepName
 	}
+	ctx, finishTelemetry := ctx.startTelemetrySpan("workflow.step." + name)
+	defer finishTelemetryScope(finishTelemetry, &err)
 	stepKey := ""
 	if explicitKey != "" {
 		stepKey = "step:" + name + ":" + explicitKey

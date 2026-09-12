@@ -10,6 +10,8 @@ type contextKey uint8
 const (
 	stateAuthorityContextKey contextKey = iota
 	activationExecutionContextKey
+	telemetryContextKey
+	telemetryTraceIDContextKey
 )
 
 // Context is passed to Go component handlers.
@@ -244,6 +246,7 @@ func (c *Context) setLifecycleCorrelationIDs(runCorrelationID, componentCorrelat
 
 func (c *Context) setTelemetry(telemetry *telemetry) {
 	c.telemetry = telemetry
+	c.Context = context.WithValue(c.Context, telemetryContextKey, &invocationTelemetry{telemetry: telemetry, invocationID: c.InvocationID(), runID: c.RunID()})
 }
 
 func (c *Context) runCorrelationID() string {
