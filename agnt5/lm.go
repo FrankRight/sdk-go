@@ -700,11 +700,13 @@ func NewOllamaModel(config OpenAIConfig) *OpenAIModel {
 // lm.started/completed/failed from the activation RPCs) and only stream deltas
 // are emitted, correlated to the activation ID. Otherwise the SDK emits the
 // lm lifecycle events itself.
-func (c *Context) Generate(model LanguageModel, request GenerateRequest) (GenerateResponse, error) {
+func (c *Context) Generate(model LanguageModel, request GenerateRequest) (resp GenerateResponse, err error) {
 	if model == nil {
 		return GenerateResponse{}, errors.New("agnt5: nil language model")
 	}
 	modelName, provider := languageModelIdentity(model, request)
+	c, finishTelemetry := c.startTelemetrySpan("lm." + modelName)
+	defer func() { finishTelemetry(err) }()
 	durable := c.Metadata(durableActivationV1Capability) == "true"
 	lmCorrelationID := newCorrelationID("lm")
 	parentCorrelationID := c.parentCorrelationID()
@@ -723,10 +725,6 @@ func (c *Context) Generate(model LanguageModel, request GenerateRequest) (Genera
 			},
 		))
 	}
-	var (
-		resp GenerateResponse
-		err  error
-	)
 	if streamingModel, ok := model.(StreamingLanguageModel); ok && c.IsStreaming() {
 		if durable {
 			resp, err = c.streamDurableModel(streamingModel, request, modelName, provider, func(chunk ModelStreamChunk, activationID string) error {

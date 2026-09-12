@@ -68,6 +68,40 @@ func main() {
 See [`examples/quickstart`](examples/quickstart) for a runnable function and a
 workflow with a durable step.
 
+## Worker logs and traces
+
+Workers export application and lifecycle logs, invocation spans, and nested
+step/model spans through OTLP gRPC. Set `OTEL_EXPORTER_OTLP_ENDPOINT` to your
+collector, or use `OTEL_EXPORTER_OTLP_LOGS_ENDPOINT` and
+`OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` for separate destinations. Each signal falls
+back to `http://grpc.agnt5.com:3418` when its endpoint and the shared endpoint
+are unset. Export is best effort; worker shutdown drains both queues within a
+shared five-second limit.
+
+`ctx.Logger()` keeps writing durable journal events and also exports application
+logs. To forward standard `log/slog` records, wrap your handler before starting
+workers:
+
+```go
+logger := slog.New(agnt5.NewSlogHandler(slog.NewJSONHandler(os.Stderr, nil)))
+slog.SetDefault(logger) // optional: use logger directly for a private logger
+
+// Inside a component; derived contexts retain run and trace attribution.
+slog.InfoContext(ctx, "processing order", "order_id", orderID)
+```
+
+The bridge preserves the supplied handler's output, groups, and level filter.
+Pass the invocation context to `InfoContext`, `ErrorContext`, and similar calls.
+Calls without that context stay with the local handler. The SDK does not replace
+process-global loggers or trace providers.
+
+Records carry `log_source=application`, `agnt5.run.id`, `run_id`, and active
+`trace_id`/`span_id` fields. The worker resource supplies project, deployment,
+worker, and application identity. W3C `traceparent` metadata is continued; pull
+jobs with only a runtime trace ID retain that ID without fabricating a parent.
+Spans include component names and attempt/error information; they do not add
+handler input/output or model prompts to telemetry.
+
 ## Invoke a deployed component
 
 ```go

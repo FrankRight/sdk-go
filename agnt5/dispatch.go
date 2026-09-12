@@ -13,6 +13,9 @@ import (
 
 func (w *Worker) dispatchServiceMessages(ctx context.Context, req *pb.DispatchComponentRequest) []*pb.ServiceMessage {
 	invocation := invocationFromDispatch(req)
+	ctx, finishTelemetry := w.startInvocationTelemetry(ctx, invocation)
+	var telemetryErr error
+	defer func() { finishTelemetry(telemetryErr) }()
 	startedAt := time.Now()
 	startedAtNS := startedAt.UnixNano()
 	runCorrelationID := runCorrelationIDFromRunID(invocation.RunID)
@@ -35,6 +38,7 @@ func (w *Worker) dispatchServiceMessages(ctx context.Context, req *pb.DispatchCo
 			componentStartedEvent(invocation, metadata, componentCorrelationID, runCorrelationID, startedAtNS),
 		}
 		if err := w.writeEvents(ctx, started); err != nil {
+			telemetryErr = err
 			return []*pb.ServiceMessage{w.dispatchServiceMessageFromResponse(dispatchResponseFromResult(req, InvocationResult{}, err))}
 		}
 		w.logLifecycle(ctx, invocation, "INFO", "run started")
@@ -64,12 +68,14 @@ func (w *Worker) dispatchServiceMessages(ctx context.Context, req *pb.DispatchCo
 		}
 	}
 	if IsWaitingForUserInput(invokeErr) {
+		telemetryErr = invokeErr
 		w.logLifecycle(ctx, invocation, "INFO", "workflow paused")
 		messages = append(messages, w.dispatchServiceMessageFromResponse(dispatchPausedResponse(req, result, invokeErr)))
 		return messages
 	}
 	var sleepSuspension *durableSleepSuspensionError
 	if errors.As(invokeErr, &sleepSuspension) && sleepSuspension.suspension != nil {
+		telemetryErr = invokeErr
 		w.logLifecycle(ctx, invocation, "INFO", "workflow paused")
 		messages = append(messages, w.dispatchServiceMessageFromResponse(
 			dispatchSuspendedResponse(req, sleepSuspension.suspension),
@@ -77,12 +83,14 @@ func (w *Worker) dispatchServiceMessages(ctx context.Context, req *pb.DispatchCo
 		return messages
 	}
 	if invokeErr != nil {
+		telemetryErr = invokeErr
 		w.logLifecycle(ctx, invocation, "ERROR", "component failed", "error", invokeErr.Error())
 		_ = w.writeComponentFailed(ctx, invocation, metadata, componentCorrelationID, runCorrelationID, durationMS, invokeErr)
 		messages = append(messages, w.dispatchServiceMessageFromResponse(dispatchResponseFromResult(req, result, invokeErr)))
 		return messages
 	}
 	if err := w.writeComponentCompleted(ctx, invocation, metadata, componentCorrelationID, runCorrelationID, durationMS, result); err != nil {
+		telemetryErr = err
 		messages = append(messages, w.dispatchServiceMessageFromResponse(dispatchResponseFromResult(req, result, err)))
 		return messages
 	}

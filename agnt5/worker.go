@@ -495,6 +495,8 @@ func nextBackoff(current, max time.Duration) time.Duration {
 }
 
 func (w *Worker) invoke(ctx context.Context, inv Invocation, streamParentCorrelationID ...string) (result InvocationResult, err error) {
+	ctx, finishTelemetry := w.startInvocationTelemetry(ctx, inv)
+	defer func() { finishTelemetry(err) }()
 	if builtinResult, handled, builtinErr := w.invokeBuiltInScorer(ctx, inv); handled {
 		return builtinResult, builtinErr
 	}

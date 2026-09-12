@@ -551,6 +551,9 @@ func dispatchRequestFromJob(job *pb.JobAssignment, serviceName string) *pb.Dispa
 	}
 	metadata := cloneStringMap(job.GetMetadata())
 	metadata["dispatch_mode"] = "pull"
+	if job.GetTraceId() != "" {
+		metadata["trace_id"] = job.GetTraceId()
+	}
 	return &pb.DispatchComponentRequest{
 		InvocationId:  invocationID,
 		ServiceName:   serviceName,

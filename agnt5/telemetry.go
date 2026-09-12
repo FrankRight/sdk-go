@@ -6,23 +6,29 @@ import (
 	"os"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploggrpc"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 	"go.opentelemetry.io/otel/log"
 	sdklog "go.opentelemetry.io/otel/sdk/log"
 	"go.opentelemetry.io/otel/sdk/resource"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	"go.opentelemetry.io/otel/trace"
 )
 
 const defaultOTLPLogsEndpoint = "grpc.agnt5.com:3418"
 
-// telemetry owns the OTLP log pipeline for a worker. It is intentionally
+// telemetry owns the OTLP log and trace pipelines for a worker. It is intentionally
 // best-effort: journal events remain the durable source of truth.
 type telemetry struct {
-	logger   log.Logger
-	provider *sdklog.LoggerProvider
-	resource *resource.Resource
+	logger        log.Logger
+	provider      *sdklog.LoggerProvider
+	resource      *resource.Resource
+	traceProvider *sdktrace.TracerProvider
+	tracer        trace.Tracer
 }
 
 func (w *Worker) initializeTelemetry(ctx context.Context) {
@@ -44,7 +50,16 @@ func (w *Worker) initializeTelemetry(ctx context.Context) {
 	if err != nil {
 		return
 	}
-	w.telemetry = newTelemetry(w, exporter)
+	traceOptions := []otlptracegrpc.Option{}
+	if os.Getenv("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT") == "" && os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT") == "" {
+		traceOptions = append(traceOptions, otlptracegrpc.WithEndpoint(defaultOTLPLogsEndpoint), otlptracegrpc.WithInsecure())
+	}
+	traceExporter, traceErr := otlptracegrpc.New(ctx, traceOptions...)
+	if traceErr != nil {
+		w.telemetry = newTelemetry(w, exporter)
+		return
+	}
+	w.telemetry = newTelemetry(w, exporter, traceExporter)
 }
 
 func (w *Worker) shutdownTelemetry() {
@@ -57,7 +72,12 @@ func (w *Worker) shutdownTelemetry() {
 	}
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	_ = telemetry.provider.Shutdown(shutdownCtx)
+	var shutdown sync.WaitGroup
+	shutdown.Go(func() { _ = telemetry.provider.Shutdown(shutdownCtx) })
+	if telemetry.traceProvider != nil {
+		shutdown.Go(func() { _ = telemetry.traceProvider.Shutdown(shutdownCtx) })
+	}
+	shutdown.Wait()
 }
 
 func (w *Worker) currentTelemetry() *telemetry {
@@ -66,17 +86,22 @@ func (w *Worker) currentTelemetry() *telemetry {
 	return w.telemetry
 }
 
-func newTelemetry(w *Worker, exporter sdklog.Exporter) *telemetry {
+func newTelemetry(w *Worker, exporter sdklog.Exporter, traceExporters ...sdktrace.SpanExporter) *telemetry {
 	res := telemetryResource(w)
 	provider := sdklog.NewLoggerProvider(
 		sdklog.WithResource(res),
 		sdklog.WithProcessor(sdklog.NewBatchProcessor(exporter)),
 	)
-	return &telemetry{
+	t := &telemetry{
 		logger:   provider.Logger("github.com/agnt5dev/sdk-go/agnt5"),
 		provider: provider,
 		resource: res,
 	}
+	if len(traceExporters) > 0 && traceExporters[0] != nil {
+		t.traceProvider = sdktrace.NewTracerProvider(sdktrace.WithResource(res), sdktrace.WithIDGenerator(runtimeTraceIDGenerator{}), sdktrace.WithBatcher(traceExporters[0]))
+		t.tracer = t.traceProvider.Tracer("github.com/agnt5dev/sdk-go/agnt5")
+	}
+	return t
 }
 
 func telemetryResource(w *Worker) *resource.Resource {
@@ -148,6 +173,9 @@ func (t *telemetry) emit(ctx context.Context, level, message, runID string, fiel
 	sort.Strings(keys)
 	for _, key := range keys {
 		attrs = append(attrs, attribute.String("field."+key, stringifyLogValue(fields[key])))
+	}
+	if sc := trace.SpanContextFromContext(ctx); sc.IsValid() {
+		attrs = append(attrs, attribute.String("trace_id", sc.TraceID().String()), attribute.String("span_id", sc.SpanID().String()))
 	}
 	record.AddAttributes(attrs...)
 	t.logger.Emit(ctx, record)
