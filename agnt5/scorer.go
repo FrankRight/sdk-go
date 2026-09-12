@@ -287,6 +287,7 @@ func (w *Worker) invokeBuiltInScorer(ctx context.Context, inv Invocation) (Invoc
 		}
 	}
 	runCtx := newContext(ctx, inv, w.checkpointWriter, canonicalProjectID(w.invocationMetadata(inv)), w.stateStore)
+	runCtx.setTelemetry(w.currentTelemetry())
 	result, err := DefaultScorerRegistry().Run(runCtx, inv.ComponentName, request)
 	if err != nil {
 		return InvocationResult{LeaseID: inv.LeaseID, Events: runCtx.Events()}, true, err

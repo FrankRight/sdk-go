@@ -24,11 +24,12 @@ const defaultOTLPLogsEndpoint = "grpc.agnt5.com:3418"
 // telemetry owns the OTLP log and trace pipelines for a worker. It is intentionally
 // best-effort: journal events remain the durable source of truth.
 type telemetry struct {
-	logger        log.Logger
-	provider      *sdklog.LoggerProvider
-	resource      *resource.Resource
-	traceProvider *sdktrace.TracerProvider
-	tracer        trace.Tracer
+	logger             log.Logger
+	provider           *sdklog.LoggerProvider
+	resource           *resource.Resource
+	traceProvider      *sdktrace.TracerProvider
+	tracer             trace.Tracer
+	identityAttributes []attribute.KeyValue
 }
 
 func (w *Worker) initializeTelemetry(ctx context.Context) {
@@ -50,11 +51,11 @@ func (w *Worker) initializeTelemetry(ctx context.Context) {
 	if err != nil {
 		return
 	}
-	traceOptions := []otlptracegrpc.Option{}
 	if os.Getenv("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT") == "" && os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT") == "" {
-		traceOptions = append(traceOptions, otlptracegrpc.WithEndpoint(defaultOTLPLogsEndpoint), otlptracegrpc.WithInsecure())
+		w.telemetry = newTelemetry(w, exporter)
+		return
 	}
-	traceExporter, traceErr := otlptracegrpc.New(ctx, traceOptions...)
+	traceExporter, traceErr := otlptracegrpc.New(ctx)
 	if traceErr != nil {
 		w.telemetry = newTelemetry(w, exporter)
 		return
@@ -96,6 +97,14 @@ func newTelemetry(w *Worker, exporter sdklog.Exporter, traceExporters ...sdktrac
 		logger:   provider.Logger("github.com/agnt5dev/sdk-go/agnt5"),
 		provider: provider,
 		resource: res,
+	}
+	// Trace authorization reads span tags, so retain canonical worker identity
+	// on each span as well as the resource. Invocation metadata cannot override it.
+	for _, attr := range res.Attributes() {
+		switch attr.Key {
+		case "agnt5.workspace.id", "agnt5.project.id", "agnt5.deployment.id":
+			t.identityAttributes = append(t.identityAttributes, attr)
+		}
 	}
 	if len(traceExporters) > 0 && traceExporters[0] != nil {
 		t.traceProvider = sdktrace.NewTracerProvider(sdktrace.WithResource(res), sdktrace.WithIDGenerator(runtimeTraceIDGenerator{}), sdktrace.WithBatcher(traceExporters[0]))

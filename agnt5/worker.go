@@ -17,7 +17,7 @@ import (
 )
 
 const (
-	defaultServiceVersion      = "0.8.0"
+	defaultServiceVersion      = "0.9.0"
 	defaultServiceType         = "go"
 	defaultCoordinatorEndpoint = "http://localhost:34186"
 	defaultMaxReconnects       = uint32(5)
@@ -496,7 +496,7 @@ func nextBackoff(current, max time.Duration) time.Duration {
 
 func (w *Worker) invoke(ctx context.Context, inv Invocation, streamParentCorrelationID ...string) (result InvocationResult, err error) {
 	ctx, finishTelemetry := w.startInvocationTelemetry(ctx, inv)
-	defer func() { finishTelemetry(err) }()
+	defer finishTelemetryScope(finishTelemetry, &err)
 	if builtinResult, handled, builtinErr := w.invokeBuiltInScorer(ctx, inv); handled {
 		return builtinResult, builtinErr
 	}

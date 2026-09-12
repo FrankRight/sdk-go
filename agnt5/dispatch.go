@@ -15,7 +15,7 @@ func (w *Worker) dispatchServiceMessages(ctx context.Context, req *pb.DispatchCo
 	invocation := invocationFromDispatch(req)
 	ctx, finishTelemetry := w.startInvocationTelemetry(ctx, invocation)
 	var telemetryErr error
-	defer func() { finishTelemetry(telemetryErr) }()
+	defer finishTelemetryScope(finishTelemetry, &telemetryErr)
 	startedAt := time.Now()
 	startedAtNS := startedAt.UnixNano()
 	runCorrelationID := runCorrelationIDFromRunID(invocation.RunID)

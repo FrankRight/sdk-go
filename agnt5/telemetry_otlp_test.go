@@ -49,7 +49,7 @@ func TestTelemetryOTLPDispatchAndShutdown(t *testing.T) {
 		t.Setenv("OTEL_EXPORTER_OTLP"+signal+"_ENDPOINT", "http://"+listener.Addr().String())
 		t.Setenv("OTEL_EXPORTER_OTLP"+signal+"_HEADERS", "")
 	}
-	worker := NewWorker("wire-test", WithWorkerID("worker-1"), WithProjectID("project-1"), WithDeploymentID("deployment-1"))
+	worker := NewWorker("wire-test", WithWorkerID("worker-1"), WithWorkspaceID("12345678-1234-4234-8234-123456789abc"), WithProjectID("project-1"), WithDeploymentID("deployment-1"))
 	worker.initializeTelemetry(context.Background())
 	t.Cleanup(worker.shutdownTelemetry)
 	logger := slog.New(NewSlogHandler(slog.NewTextHandler(io.Discard, nil)))
@@ -86,6 +86,13 @@ func TestTelemetryOTLPDispatchAndShutdown(t *testing.T) {
 			for _, span := range scope.Spans {
 				spanCount++
 				spanID = span.SpanId
+				attrs := make(map[string]string)
+				for _, attr := range span.Attributes {
+					attrs[attr.Key] = attr.Value.GetStringValue()
+				}
+				if attrs["agnt5.workspace.id"] != "12345678-1234-4234-8234-123456789abc" || attrs["agnt5.project.id"] != "project-1" || attrs["agnt5.deployment.id"] != "deployment-1" {
+					t.Fatalf("wire span identity = %#v", attrs)
+				}
 			}
 		}
 	}
@@ -116,5 +123,20 @@ func TestTelemetryOTLPDispatchAndShutdown(t *testing.T) {
 	}
 	if recordCount != 4 {
 		t.Fatalf("wire logs = %d, want application plus three lifecycle lines", recordCount)
+	}
+}
+
+func TestTelemetryTraceExporterRequiresEndpoint(t *testing.T) {
+	t.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "")
+	t.Setenv("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT", "")
+	t.Setenv("OTEL_EXPORTER_OTLP_LOGS_ENDPOINT", "http://127.0.0.1:4317")
+	worker := NewWorker("service")
+	worker.initializeTelemetry(context.Background())
+	t.Cleanup(worker.shutdownTelemetry)
+	if worker.telemetry == nil || worker.telemetry.provider == nil {
+		t.Fatal("existing log pipeline was disabled")
+	}
+	if worker.telemetry.traceProvider != nil || worker.telemetry.tracer != nil {
+		t.Fatal("trace exporter enabled without a configured endpoint")
 	}
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"errors"
+	"fmt"
 
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
@@ -25,11 +26,15 @@ func (w *Worker) startInvocationTelemetry(ctx context.Context, inv Invocation) (
 	if scope, ok := ctx.Value(telemetryContextKey).(*invocationTelemetry); ok && scope.telemetry == t && scope.invocationID == inv.ID {
 		return ctx, func(error) {}
 	}
-	ctx = propagation.TraceContext{}.Extract(ctx, propagation.MapCarrier(inv.Metadata))
-	if !trace.SpanContextFromContext(ctx).IsValid() {
-		if id, err := trace.TraceIDFromHex(inv.Metadata["trace_id"]); err == nil {
-			ctx = context.WithValue(ctx, telemetryTraceIDContextKey, id)
-		}
+	// Incoming job identity takes precedence over a worker startup span. Extract
+	// against an empty span context so an inherited parent is not mistaken for
+	// a valid incoming W3C parent; cancellation and other context values survive.
+	incoming := propagation.TraceContext{}.Extract(trace.ContextWithSpanContext(ctx, trace.SpanContext{}), propagation.MapCarrier(inv.Metadata))
+	if trace.SpanContextFromContext(incoming).IsValid() {
+		ctx = incoming
+	} else if id, err := trace.TraceIDFromHex(inv.Metadata["trace_id"]); err == nil {
+		ctx = trace.ContextWithSpanContext(ctx, trace.SpanContext{})
+		ctx = context.WithValue(ctx, telemetryTraceIDContextKey, id)
 	}
 	ctx = context.WithValue(ctx, telemetryContextKey, &invocationTelemetry{telemetry: t, invocationID: inv.ID, runID: runIDForTelemetry(inv)})
 	if t == nil || t.tracer == nil {
@@ -42,7 +47,7 @@ func (w *Worker) startInvocationTelemetry(ctx context.Context, inv Invocation) (
 		}
 	}
 	ctx, span := t.tracer.Start(ctx, string(componentType)+"."+inv.ComponentName,
-		trace.WithSpanKind(trace.SpanKindConsumer), trace.WithAttributes(
+		trace.WithSpanKind(trace.SpanKindConsumer), trace.WithAttributes(t.identityAttributes...), trace.WithAttributes(
 			attribute.String("agnt5.run.id", runIDForTelemetry(inv)), attribute.String("run_id", runIDForTelemetry(inv)),
 			attribute.String("agnt5.invocation.id", inv.ID), attribute.String("agnt5.component.name", inv.ComponentName),
 			attribute.String("agnt5.component.type", string(componentType)), attribute.Int("agnt5.attempt", inv.Attempt)))
@@ -53,10 +58,20 @@ func (c *Context) startTelemetrySpan(name string) (*Context, func(error)) {
 	if c == nil || c.telemetry == nil || c.telemetry.tracer == nil {
 		return c, func(error) {}
 	}
-	ctx, span := c.telemetry.tracer.Start(c.Context, name, trace.WithAttributes(attribute.String("agnt5.run.id", c.RunID())))
+	ctx, span := c.telemetry.tracer.Start(c.Context, name, trace.WithAttributes(c.telemetry.identityAttributes...), trace.WithAttributes(attribute.String("agnt5.run.id", c.RunID())))
 	child := c.withParentCorrelationID(c.parentCID)
 	child.Context = ctx
 	return child, func(err error) { finishTelemetrySpan(span, err) }
+}
+
+// finishTelemetryScope is deferred directly so nested spans record a panic
+// before it continues to the existing invocation recovery boundary.
+func finishTelemetryScope(finish func(error), err *error) {
+	if recovered := recover(); recovered != nil {
+		finish(fmt.Errorf("agnt5: panic: %v", recovered))
+		panic(recovered)
+	}
+	finish(*err)
 }
 
 func finishTelemetrySpan(span trace.Span, err error) {

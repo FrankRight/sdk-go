@@ -706,7 +706,7 @@ func (c *Context) Generate(model LanguageModel, request GenerateRequest) (resp G
 	}
 	modelName, provider := languageModelIdentity(model, request)
 	c, finishTelemetry := c.startTelemetrySpan("lm." + modelName)
-	defer func() { finishTelemetry(err) }()
+	defer finishTelemetryScope(finishTelemetry, &err)
 	durable := c.Metadata(durableActivationV1Capability) == "true"
 	lmCorrelationID := newCorrelationID("lm")
 	parentCorrelationID := c.parentCorrelationID()

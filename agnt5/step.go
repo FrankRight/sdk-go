@@ -164,7 +164,7 @@ func runStep[T any](ctx *Context, name, explicitKey string, input any, fn func(c
 		return zero, ErrInvalidStepName
 	}
 	ctx, finishTelemetry := ctx.startTelemetrySpan("workflow.step." + name)
-	defer func() { finishTelemetry(err) }()
+	defer finishTelemetryScope(finishTelemetry, &err)
 	stepKey := ""
 	if explicitKey != "" {
 		stepKey = "step:" + name + ":" + explicitKey
