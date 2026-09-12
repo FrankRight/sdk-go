@@ -273,3 +273,32 @@ See [CONTRIBUTING.md](CONTRIBUTING.md). Report security issues according to
 ## License
 
 Licensed under the [Apache License 2.0](LICENSE).
+
+## Response wait
+
+Run and stream calls wait up to **5 minutes** by default. Set the per-call wait
+to any value from zero to 24 hours. Zero returns a pending receipt immediately
+after acceptance. This controls response waiting, not the workflow execution
+deadline: accepted work continues when the wait expires or the client disconnects.
+
+```go
+options := []agnt5.RunOption{
+    agnt5.WithRunComponentType(agnt5.ComponentTypeWorkflow),
+    agnt5.WithWaitTimeout(time.Minute),
+}
+result, err := client.Run(ctx, "process_order", order, options...)
+err = client.StreamEvents(ctx, "process_order", order, handleEvent, options...)
+```
+
+`WithWaitTimeout` accepts durations in whole milliseconds. `Run` returns `202`
+pending receipts directly, without additional polling. `StreamEvents` delivers
+`stream.wait_expired` when the wait expires, or `stream.detached` for a `202`
+receipt. Use the run ID to read status/results. Chunk-only `Stream` returns
+`RunError` with the run ID when waiting ends.
+
+The default HTTP timeout allows at least the wait plus 10 seconds, or the client
+timeout if longer. Use `WithRunTimeout(75*time.Second)` to set it explicitly;
+the context deadline may end the request earlier.
+
+`BatchStream` and the `/batch/stream` endpoint have been removed. Use `Batch`
+and `GetBatchStatus` to submit and observe batch work.

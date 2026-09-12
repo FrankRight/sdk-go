@@ -122,39 +122,56 @@ func TestClientRunAcceptsDirectOutputBody(t *testing.T) {
 	}
 }
 
-func TestClientRunWaitsWhenGatewayDetachesExcessWaiter(t *testing.T) {
-	var requests []string
-	resultAttempts := 0
+func TestClientRunReturnsAcceptedWithoutStartingAnotherWait(t *testing.T) {
+	calls := 0
 	client := newHTTPTestClient(t, func(w http.ResponseWriter, r *http.Request) {
-		requests = append(requests, r.URL.Path)
-		switch r.URL.Path {
-		case "/v1/functions/noop/run":
-			w.WriteHeader(http.StatusAccepted)
-			_, _ = w.Write([]byte(`{"run_id":"run-detached","status":"queued"}`))
-		case "/v1/status/run-detached":
-			_, _ = w.Write([]byte(`{"run_id":"run-detached","status":"completed"}`))
-		case "/v1/result/run-detached":
-			resultAttempts++
-			if resultAttempts == 1 {
-				w.WriteHeader(http.StatusNotFound)
-				_, _ = w.Write([]byte(`{"status":"completed","error":"result not projected yet"}`))
-				return
-			}
-			_, _ = w.Write([]byte(`{"run_id":"run-detached","status":"completed","output":{"ok":true}}`))
-		default:
-			http.NotFound(w, r)
+		calls++
+		if r.URL.Path != "/v1/functions/noop/run" {
+			t.Errorf("unexpected path: %s", r.URL.Path)
 		}
+		if got := r.Header.Get("X-AGNT5-Wait-Timeout-Ms"); got != "60000" {
+			t.Errorf("wait: %s", got)
+		}
+		w.WriteHeader(http.StatusAccepted)
+		_, _ = w.Write([]byte(`{"run_id":"run-detached","status":"pending"}`))
 	})
+	result, err := client.Run(context.Background(), "noop", nil, WithWaitTimeout(time.Minute))
+	if err != nil || result.RunID != "run-detached" || result.Status != RunStatusPending || calls != 1 {
+		t.Fatalf("result=%#v err=%v calls=%d", result, err, calls)
+	}
+}
 
-	result, err := client.Run(context.Background(), "noop", nil, WithRunTimeout(time.Second))
-	if err != nil {
-		t.Fatalf("run: %v", err)
+func TestClientStreamWaitReceipts(t *testing.T) {
+	for _, accepted := range []bool{false, true} {
+		client := newHTTPTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+			if got := r.Header.Get("X-AGNT5-Wait-Timeout-Ms"); got != "300000" {
+				t.Errorf("wait: %s", got)
+			}
+			if accepted {
+				w.WriteHeader(http.StatusAccepted)
+				_, _ = w.Write([]byte(`{"run_id":"run-wait","status":"pending"}`))
+			} else {
+				w.Header().Set("Content-Type", "text/event-stream")
+				_, _ = w.Write([]byte("event: stream.wait_expired\ndata: {\"run_id\":\"run-wait\",\"status\":\"pending\"}\n\n"))
+			}
+		})
+		var events []ReceivedEvent
+		err := client.StreamEvents(context.Background(), "noop", nil, func(event ReceivedEvent) error { events = append(events, event); return nil })
+		if err != nil || len(events) != 1 || events[0].RunID != "run-wait" {
+			t.Fatalf("events=%#v err=%v", events, err)
+		}
 	}
-	if !result.IsSuccess() {
-		t.Fatalf("result: %#v", result)
-	}
-	if got, want := strings.Join(requests, ","), "/v1/functions/noop/run,/v1/status/run-detached,/v1/result/run-detached,/v1/result/run-detached"; got != want {
-		t.Fatalf("requests=%q want=%q", got, want)
+}
+
+func TestClientRejectsInvalidWaitBeforeSending(t *testing.T) {
+	client := newHTTPTestClient(t, func(w http.ResponseWriter, r *http.Request) { t.Error("unexpected request") })
+	for _, wait := range []time.Duration{-1, time.Microsecond, 4294967296 * time.Millisecond} {
+		if _, err := client.Run(context.Background(), "noop", nil, WithWaitTimeout(wait)); err == nil {
+			t.Fatal("expected invalid wait")
+		}
+		if err := client.StreamEvents(context.Background(), "noop", nil, func(ReceivedEvent) error { return nil }, WithWaitTimeout(wait)); err == nil {
+			t.Fatal("expected invalid wait")
+		}
 	}
 }
 

@@ -177,7 +177,7 @@ func WithBatchRawItems() BatchOption {
 }
 
 // WithBatchIdempotencyKey sets the stable caller key used to deduplicate a
-// Batch or BatchStream admission.
+// Batch admission.
 func WithBatchIdempotencyKey(key string) BatchOption {
 	return func(config *batchConfig) {
 		config.idempotencyKey = &key
@@ -315,16 +315,6 @@ type BatchStatusResponse struct {
 	Raw         map[string]any    `json:"-"`
 }
 
-// BatchStreamEvent is one SSE event from BatchStream.
-type BatchStreamEvent struct {
-	EventType string          `json:"event_type"`
-	BatchID   string          `json:"batch_id,omitempty"`
-	RunID     string          `json:"run_id,omitempty"`
-	Data      json.RawMessage `json:"data,omitempty"`
-	Metadata  map[string]any  `json:"metadata,omitempty"`
-	Raw       map[string]any  `json:"-"`
-}
-
 // IsRunning reports whether the batch is still running.
 func (r *BatchStatusResponse) IsRunning() bool {
 	if r == nil {
@@ -373,47 +363,6 @@ func (c *Client) Batch(ctx context.Context, component string, items any, opts ..
 		return nil, &ClientError{Method: http.MethodPost, URL: endpoint, StatusCode: statusCode, Body: string(responseBody)}
 	}
 	return parseBatchResult(responseBody)
-}
-
-// BatchStream submits a batch and streams batch/run events until a terminal
-// batch event is delivered.
-func (c *Client) BatchStream(ctx context.Context, component string, items any, handle func(BatchStreamEvent) error, opts ...BatchOption) error {
-	if handle == nil {
-		return errors.New("agnt5: nil batch stream handler")
-	}
-	config := newBatchConfig(opts...)
-	normalized, err := normalizeBatchItems(items, config.rawItems)
-	if err != nil {
-		return err
-	}
-	headers := c.requestHeaders("", "", config.tenant, nil)
-	if config.idempotencyKey != nil {
-		headers.Set("Idempotency-Key", *config.idempotencyKey)
-	}
-	headers.Set("Accept", "text/event-stream")
-	statusCode, responseBody, err := c.doStream(ctx, []string{
-		"v1", componentCollection(config.componentType), component, "batch", "stream",
-	}, batchRequestBody(config, normalized), headers, config.timeout, func(event ReceivedEvent) error {
-		batchEvent := parseBatchStreamEvent(event)
-		if err := handle(batchEvent); err != nil {
-			return err
-		}
-		if batchEvent.EventType == "batch.completed" || batchEvent.EventType == "batch.cancelled" {
-			return errSSEDone
-		}
-		return nil
-	})
-	if err != nil {
-		return err
-	}
-	if statusCode >= http.StatusBadRequest {
-		runErr := parseRunErrorMap(decodeJSONMapOrEmpty(responseBody), "")
-		if runErr.Message != "" {
-			return runErr
-		}
-		return &ClientError{Method: http.MethodPost, URL: c.endpoint("v1", componentCollection(config.componentType), component, "batch", "stream"), StatusCode: statusCode, Body: string(responseBody)}
-	}
-	return nil
 }
 
 // GetBatchStatus returns current batch status.
@@ -535,19 +484,6 @@ func (i BatchItemInput) requestValue(defaultIndex int) map[string]any {
 		out["timeout_ms"] = i.TimeoutMS
 	}
 	return out
-}
-
-func parseBatchStreamEvent(event ReceivedEvent) BatchStreamEvent {
-	eventType := firstNonEmpty(firstString(event.Data, "event_type", "eventType"), event.EventType)
-	metadata := fieldMap(event.Data, "metadata")
-	return BatchStreamEvent{
-		EventType: eventType,
-		BatchID:   firstNonEmpty(firstString(metadata, "batch_id", "batchId"), firstString(event.Data, "batch_id", "batchId")),
-		RunID:     firstString(event.Data, "run_id", "runId"),
-		Data:      rawJSONValue(event.Data["data"]),
-		Metadata:  metadata,
-		Raw:       event.Data,
-	}
 }
 
 func parseBatchResult(body []byte) (*BatchResult, error) {
