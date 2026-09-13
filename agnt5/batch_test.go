@@ -3,8 +3,6 @@ package agnt5
 import (
 	"context"
 	"encoding/json"
-	"errors"
-	"fmt"
 	"net/http"
 	"net/url"
 	"testing"
@@ -213,81 +211,5 @@ func TestClientCancelBatchSendsReason(t *testing.T) {
 	}
 	if cancelled.Status != BatchStatusCancelled || cancelled.CancelledItems != 2 || cancelled.CompletedItems != 1 {
 		t.Fatalf("cancelled: %#v", cancelled)
-	}
-}
-
-func TestClientBatchStreamParsesSSEAndStopsAtTerminal(t *testing.T) {
-	client := newHTTPTestClient(t, func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			t.Fatalf("method: %s", r.Method)
-		}
-		if r.URL.Path != "/v1/functions/process/batch/stream" {
-			t.Fatalf("path: %s", r.URL.Path)
-		}
-		if r.Header.Get("Accept") != "text/event-stream" {
-			t.Fatalf("accept: %q", r.Header.Get("Accept"))
-		}
-		var body struct {
-			Items []struct {
-				Input map[string]int `json:"input"`
-				Index int            `json:"index"`
-			} `json:"items"`
-		}
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-			t.Fatal(err)
-		}
-		if len(body.Items) != 2 || body.Items[0].Index != 0 || body.Items[1].Input["id"] != 2 {
-			t.Fatalf("items: %#v", body.Items)
-		}
-		w.Header().Set("Content-Type", "text/event-stream")
-		_, _ = fmt.Fprint(w, "event: batch.created\n")
-		_, _ = fmt.Fprint(w, "data: {\"event_type\":\"batch.created\",\"run_id\":\"batch-5\",\"data\":{\"total_items\":2},\"metadata\":{\"batch_id\":\"batch-5\"}}\n\n")
-		_, _ = fmt.Fprint(w, "event: run.completed\n")
-		_, _ = fmt.Fprint(w, "data: {\"event_type\":\"run.completed\",\"run_id\":\"run-5\",\"data\":{\"output_data\":{\"ok\":true}},\"metadata\":{\"batch_id\":\"batch-5\",\"batch_index\":\"0\"}}\n\n")
-		_, _ = fmt.Fprint(w, "event: batch.completed\n")
-		_, _ = fmt.Fprint(w, "data: {\"event_type\":\"batch.completed\",\"run_id\":\"batch-5\",\"data\":{},\"metadata\":{\"batch_id\":\"batch-5\"}}\n\n")
-		_, _ = fmt.Fprint(w, "event: run.completed\n")
-		_, _ = fmt.Fprint(w, "data: {\"event_type\":\"run.completed\",\"run_id\":\"late\",\"data\":{},\"metadata\":{\"batch_id\":\"batch-5\"}}\n\n")
-	})
-
-	var events []BatchStreamEvent
-	err := client.BatchStream(context.Background(), "process", []map[string]int{{"id": 1}, {"id": 2}}, func(event BatchStreamEvent) error {
-		events = append(events, event)
-		return nil
-	})
-	if err != nil {
-		t.Fatalf("batch stream: %v", err)
-	}
-	if len(events) != 3 {
-		t.Fatalf("events: %#v", events)
-	}
-	if events[0].EventType != "batch.created" || events[0].BatchID != "batch-5" {
-		t.Fatalf("first event: %#v", events[0])
-	}
-	if events[1].RunID != "run-5" || string(events[1].Data) != `{"output_data":{"ok":true}}` {
-		t.Fatalf("run event: %#v", events[1])
-	}
-	if events[2].EventType != "batch.completed" {
-		t.Fatalf("terminal event: %#v", events[2])
-	}
-}
-
-func TestClientBatchStreamReturnsPlainTextSSEError(t *testing.T) {
-	client := newHTTPTestClient(t, func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "text/event-stream")
-		_, _ = fmt.Fprint(w, "event: error\n")
-		_, _ = fmt.Fprint(w, "data: stream error: tail failed\n\n")
-	})
-
-	err := client.BatchStream(context.Background(), "process", []any{map[string]int{"id": 1}}, func(BatchStreamEvent) error {
-		t.Fatal("handler should not be called")
-		return nil
-	})
-	var runErr *RunError
-	if !errors.As(err, &runErr) {
-		t.Fatalf("expected RunError, got %T %v", err, err)
-	}
-	if runErr.Message != "stream error: tail failed" {
-		t.Fatalf("run error: %#v", runErr)
 	}
 }

@@ -147,6 +147,7 @@ func NewClient(gatewayURL string, opts ...ClientOption) (*Client, error) {
 type RunStatus string
 
 const (
+	RunStatusPending           RunStatus = "pending"
 	RunStatusEnqueued          RunStatus = "enqueued"
 	RunStatusQueued            RunStatus = "queued"
 	RunStatusStarted           RunStatus = "started"
@@ -375,6 +376,7 @@ func (e *ClientError) Error() string {
 }
 
 type runConfig struct {
+	waitTimeout    time.Duration
 	componentType  ComponentType
 	sessionID      string
 	userID         string
@@ -415,6 +417,27 @@ func WithRunTenant(tenantID string) RunOption {
 	return func(config *runConfig) {
 		config.tenant = tenantID
 	}
+}
+
+// WithWaitTimeout controls the gateway response wait, not workflow execution.
+// The default is five minutes. Zero requests an immediate accepted receipt.
+func WithWaitTimeout(timeout time.Duration) RunOption {
+	return func(config *runConfig) { config.waitTimeout = timeout }
+}
+
+func (c *Client) applyWait(config runConfig, headers http.Header) (time.Duration, error) {
+	if config.waitTimeout < 0 || config.waitTimeout > 24*time.Hour || config.waitTimeout%time.Millisecond != 0 {
+		return 0, errors.New("agnt5: wait timeout must be whole milliseconds from 0 to 86400000")
+	}
+	headers.Set("X-AGNT5-Wait-Timeout-Ms", fmt.Sprint(config.waitTimeout.Milliseconds()))
+	if config.timeout > 0 {
+		return config.timeout, nil
+	}
+	timeout := config.waitTimeout + 10*time.Second
+	if c.httpClient.Timeout > timeout {
+		timeout = c.httpClient.Timeout
+	}
+	return timeout, nil
 }
 
 // WithRunTimeout sets a per-request context timeout.
@@ -520,9 +543,13 @@ func (c *Client) Run(ctx context.Context, component string, input any, opts ...R
 	if config.idempotencyKey != nil {
 		headers.Set("Idempotency-Key", *config.idempotencyKey)
 	}
+	timeout, err := c.applyWait(config, headers)
+	if err != nil {
+		return nil, err
+	}
 	statusCode, body, endpoint, err := c.doJSON(ctx, http.MethodPost, []string{
 		"v1", componentCollection(config.componentType), component, "run",
-	}, inputOrEmptyObject(input), headers, config.timeout)
+	}, inputOrEmptyObject(input), headers, timeout)
 	if err != nil {
 		return nil, err
 	}
@@ -541,73 +568,9 @@ func (c *Client) Run(ctx context.Context, component string, input any, opts ...R
 		}
 		return nil, &ClientError{Method: http.MethodPost, URL: endpoint, StatusCode: statusCode, Body: string(body)}
 	}
-	response, err := parseRunResponse(body, statusCode)
-	if err != nil {
-		return nil, err
-	}
-	if statusCode != http.StatusAccepted || response.RunID == "" {
-		return response, nil
-	}
-
-	// The gateway may durably detach excess synchronous waiters. Preserve
-	// Run's blocking contract via short status/result requests rather than one
-	// long-lived gateway tail.
-	waitTimeout := config.timeout
-	if waitTimeout <= 0 {
-		waitTimeout = c.httpClient.Timeout
-	}
-	if waitTimeout <= 0 {
-		waitTimeout = 300 * time.Second
-	}
-	return c.waitForDetachedRun(ctx, response.RunID, waitTimeout)
+	return parseRunResponse(body, statusCode)
 }
 
-func (c *Client) waitForDetachedRun(ctx context.Context, runID string, timeout time.Duration) (*RunResponse, error) {
-	if ctx == nil {
-		ctx = context.Background()
-	}
-	deadline := time.NewTimer(timeout)
-	defer deadline.Stop()
-	pollInterval := 100 * time.Millisecond
-	terminalStatusObserved := false
-
-	for {
-		if !terminalStatusObserved {
-			status, err := c.GetStatus(ctx, runID)
-			if err != nil {
-				return nil, err
-			}
-			terminalStatusObserved = status.IsComplete()
-		}
-		if terminalStatusObserved {
-			result, err := c.GetResult(ctx, runID)
-			if err != nil {
-				return nil, err
-			}
-			if result.Error == nil || result.Error.Code != "NOT_READY" {
-				return result, nil
-			}
-		}
-
-		pollTimer := time.NewTimer(pollInterval)
-		select {
-		case <-ctx.Done():
-			if !pollTimer.Stop() {
-				<-pollTimer.C
-			}
-			return nil, ctx.Err()
-		case <-deadline.C:
-			if !pollTimer.Stop() {
-				<-pollTimer.C
-			}
-			return timeoutRunResponse(runID, timeout), nil
-		case <-pollTimer.C:
-		}
-		pollInterval = min(pollInterval+pollInterval/2, 2*time.Second)
-	}
-}
-
-// Submit enqueues a component asynchronously through /v1/{type}/{component}/submit.
 func (c *Client) Submit(ctx context.Context, component string, input any, opts ...SubmitOption) (*SubmitResponse, error) {
 	config := newSubmitConfig(opts...)
 	bodyValue := inputOrEmptyObject(input)
@@ -718,6 +681,9 @@ func (c *Client) Stream(ctx context.Context, component string, input any, handle
 		return errors.New("agnt5: nil stream handler")
 	}
 	return c.StreamEvents(ctx, component, input, func(event ReceivedEvent) error {
+		if event.EventType == "stream.wait_expired" || event.EventType == "stream.detached" {
+			return &RunError{Message: "Response wait ended; run continues", RunID: event.RunID}
+		}
 		if event.EventType == "run.failed" {
 			return parseRunErrorMap(event.Data, event.RunID)
 		}
@@ -758,9 +724,13 @@ func (c *Client) StreamEvents(ctx context.Context, component string, input any, 
 	}
 	headers.Set("Accept", "text/event-stream")
 
+	timeout, err := c.applyWait(config, headers)
+	if err != nil {
+		return err
+	}
 	statusCode, body, err := c.doStream(ctx, []string{
 		"v1", componentCollection(config.componentType), component, "stream",
-	}, inputOrEmptyObject(input), headers, config.timeout, func(event ReceivedEvent) error {
+	}, inputOrEmptyObject(input), headers, timeout, func(event ReceivedEvent) error {
 		payload := gatewayEventPayload(event.Data)
 		event.Data = payload
 		event.ContentIndex = fieldInt(payload, "index", "content_index", "contentIndex")
@@ -771,6 +741,10 @@ func (c *Client) StreamEvents(ctx context.Context, component string, input any, 
 	})
 	if err != nil {
 		return err
+	}
+	if statusCode == http.StatusAccepted {
+		data := decodeJSONMapOrEmpty(body)
+		return handle(ReceivedEvent{EventType: "stream.detached", Data: data, RunID: firstString(data, "run_id", "runId")})
 	}
 	if statusCode >= http.StatusBadRequest {
 		runErr := parseRunErrorMap(decodeJSONMapOrEmpty(body), "")
@@ -783,7 +757,7 @@ func (c *Client) StreamEvents(ctx context.Context, component string, input any, 
 }
 
 func newRunConfig(opts ...RunOption) runConfig {
-	config := runConfig{componentType: ComponentTypeFunction}
+	config := runConfig{componentType: ComponentTypeFunction, waitTimeout: 300 * time.Second}
 	for _, opt := range opts {
 		if opt != nil {
 			opt(&config)
@@ -843,7 +817,13 @@ func (c *Client) doJSONEndpoint(ctx context.Context, method, endpoint string, bo
 		req.Header.Set("Accept", "application/json")
 	}
 
-	resp, err := c.httpClient.Do(req)
+	httpClient := c.httpClient
+	if headers.Get("X-AGNT5-Wait-Timeout-Ms") != "" {
+		copy := *httpClient
+		copy.Timeout = 0 // The per-call context owns the transport deadline.
+		httpClient = &copy
+	}
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		return 0, nil, endpoint, err
 	}
@@ -882,12 +862,18 @@ func (c *Client) doStream(ctx context.Context, path []string, bodyValue any, hea
 	}
 	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := c.httpClient.Do(req)
+	httpClient := c.httpClient
+	if headers.Get("X-AGNT5-Wait-Timeout-Ms") != "" {
+		copy := *httpClient
+		copy.Timeout = 0 // The per-call context owns the transport deadline.
+		httpClient = &copy
+	}
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		return 0, nil, err
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode >= http.StatusBadRequest {
+	if resp.StatusCode >= http.StatusBadRequest || resp.StatusCode == http.StatusAccepted {
 		body, readErr := io.ReadAll(resp.Body)
 		if readErr != nil {
 			return resp.StatusCode, nil, readErr
@@ -1363,7 +1349,7 @@ func rawJSONValue(value any) json.RawMessage {
 
 func parseRunStatus(value string) RunStatus {
 	switch RunStatus(value) {
-	case RunStatusEnqueued, RunStatusQueued, RunStatusStarted, RunStatusRunning,
+	case RunStatusPending, RunStatusEnqueued, RunStatusQueued, RunStatusStarted, RunStatusRunning,
 		RunStatusCompleted, RunStatusFailed, RunStatusCancelled, RunStatusPaused,
 		RunStatusAwaitingInput, RunStatusAwaitingUserInput, RunStatusTimeout:
 		return RunStatus(value)
@@ -1376,7 +1362,7 @@ func statusCodeFor(status RunStatus, fallback int) int {
 	switch status {
 	case RunStatusCompleted:
 		return http.StatusOK
-	case RunStatusEnqueued, RunStatusQueued, RunStatusStarted, RunStatusRunning,
+	case RunStatusPending, RunStatusEnqueued, RunStatusQueued, RunStatusStarted, RunStatusRunning,
 		RunStatusAwaitingInput, RunStatusAwaitingUserInput, RunStatusPaused:
 		return http.StatusAccepted
 	case RunStatusFailed, RunStatusCancelled, RunStatusTimeout:
