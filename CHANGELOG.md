@@ -7,6 +7,28 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-09-13
+
+### Changed
+
+- Run and stream calls share a five-minute response wait by default. Use
+  `WithWaitTimeout` to choose a whole-millisecond wait from zero to 24 hours;
+  zero returns immediately after acceptance. This requires gateway support for
+  `X-AGNT5-Wait-Timeout-Ms` and does not change the workflow execution deadline.
+- `Run` returns accepted pending receipts without additional status polling.
+  `StreamEvents` exposes `stream.wait_expired` and `stream.detached`, while
+  chunk-only `Stream` returns a `RunError` containing the run ID when waiting
+  ends. Accepted work continues; use the run ID to retrieve status and results.
+- Response wait and HTTP deadlines are separate. The default HTTP deadline
+  allows the requested wait plus ten seconds, or the configured client timeout
+  if longer. `WithRunTimeout` and the caller's context can set an earlier limit.
+
+### Removed
+
+- Remove `Client.BatchStream` and `BatchStreamEvent` with the retired
+  `/batch/stream` gateway endpoint. Migrate callers to `Batch` and
+  `GetBatchStatus`; existing callers using the removed symbols must update.
+
 ## [0.9.0] - 2026-09-12
 
 ### Added
