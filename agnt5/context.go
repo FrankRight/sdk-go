@@ -18,14 +18,15 @@ const (
 type Context struct {
 	context.Context
 
-	invocation   Invocation
-	shared       *contextShared
-	logger       *Logger
-	projectID    string
-	parentCID    string
-	runCID       string
-	componentCID string
-	telemetry    *telemetry
+	invocation       Invocation
+	shared           *contextShared
+	logger           *Logger
+	projectID        string
+	parentCID        string
+	displayParentCID string
+	runCID           string
+	componentCID     string
+	telemetry        *telemetry
 	// managedAgent names the agent whose lifecycle is owned by the enclosing
 	// durable CHILD activation record, so Agent.Run does not emit its own
 	// agent.started/completed/failed for it.
@@ -274,6 +275,7 @@ func (c *Context) withParentCorrelationID(correlationID string) *Context {
 		shared:           c.shared,
 		projectID:        c.projectID,
 		parentCID:        correlationID,
+		displayParentCID: c.displayParentCID,
 		runCID:           c.runCID,
 		componentCID:     c.componentCID,
 		telemetry:        c.telemetry,
@@ -286,12 +288,29 @@ func (c *Context) withParentCorrelationID(correlationID string) *Context {
 	return child
 }
 
+// withDisplayParentCorrelationID marks the journal record activations begun on
+// the returned context are shown under. Agent iterations are events, not
+// admitted activations, so they can never be a durable parent; this is the
+// reader-only ancestry that keeps a model or tool call beneath its iteration.
+func (c *Context) withDisplayParentCorrelationID(correlationID string) *Context {
+	child := c.withParentCorrelationID(c.parentCID)
+	child.displayParentCID = correlationID
+	return child
+}
+
+func (c *Context) displayParentCorrelationID() string {
+	return c.displayParentCID
+}
+
 // withActivationExecution scopes a durable activation: nested activations chain
 // their parent_activation_id to it and events emitted inside it parent to the
 // activation's journal record (the activation ID is the record correlation ID).
 func (c *Context) withActivationExecution(execution ActivationExecution) *Context {
 	child := c.withParentCorrelationID(execution.ActivationID)
 	child.Context = context.WithValue(c.Context, activationExecutionContextKey, execution)
+	// The admitted activation owns the work nested inside it: a tool's own model
+	// call hangs off the tool, not off the iteration that described the tool.
+	child.displayParentCID = ""
 	return child
 }
 

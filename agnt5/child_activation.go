@@ -100,7 +100,8 @@ func runDelegatedChild(
 			ChildDefinitionDigest: cloneBytes(childDefinition),
 			JoinPolicy:            protoJoinPolicy,
 		},
-		DisplayName: target.Name,
+		DisplayName:                target.Name,
+		DisplayParentCorrelationId: ctx.displayParentCorrelationID(),
 		InputData: activationInputData(map[string]any{
 			"agent":   target.Name,
 			"message": input.Message,

@@ -334,7 +334,9 @@ func (a *Agent) Run(ctx *Context, input AgentInput) (AgentResult, error) {
 				"input_data":     map[string]any{"iteration": iteration, "max_iterations": maxTurns},
 			},
 		))
-		iterationContext := agentContext.withParentCorrelationID(iterationCorrelationID)
+		iterationContext := agentContext.
+			withParentCorrelationID(iterationCorrelationID).
+			withDisplayParentCorrelationID(iterationCorrelationID)
 
 		resp, err := iterationContext.Generate(a.Model, GenerateRequest{
 			Messages: messages,
