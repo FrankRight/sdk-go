@@ -21,6 +21,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"google.golang.org/grpc/credentials"
 )
 
@@ -28,25 +29,32 @@ const externalWorkerSessionFile = "worker-session.json"
 
 var errExternalWorkerIdentityRotated = errors.New("agnt5: worker identity rotated; reconnect required")
 
+type externalWorkerRenewal struct {
+	RequestID     string `json:"request_id"`
+	PrivateKeyPEM string `json:"private_key_pem"`
+	CSRDERBase64  string `json:"csr_der_base64"`
+}
+
 type externalWorkerIdentity struct {
-	SessionID                 string    `json:"session_id"`
-	ProjectID                 string    `json:"project_id"`
-	EnvironmentID             string    `json:"environment_id"`
-	DeploymentID              string    `json:"deployment_id"`
-	WorkerPoolID              string    `json:"worker_pool_id"`
-	WorkerID                  string    `json:"worker_id"`
-	SPIFFEID                  string    `json:"spiffe_id"`
-	RuntimeEndpoint           string    `json:"runtime_endpoint"`
-	CertificateDERBase64      string    `json:"certificate_der_base64"`
-	CertificateChainDERBase64 []string  `json:"certificate_chain_der_base64"`
-	TrustBundleDERBase64      []string  `json:"trust_bundle_der_base64"`
-	TrustBundleVersion        string    `json:"trust_bundle_version"`
-	CertificateExpiresAt      time.Time `json:"certificate_expires_at"`
-	RenewAfter                time.Time `json:"renew_after"`
-	WorkloadToken             string    `json:"workload_token"`
-	TokenType                 string    `json:"token_type"`
-	TokenExpiresAt            time.Time `json:"token_expires_at"`
-	PrivateKeyPEM             string    `json:"private_key_pem"`
+	PendingRenewal            *externalWorkerRenewal `json:"pending_renewal,omitempty"`
+	SessionID                 string                 `json:"session_id"`
+	ProjectID                 string                 `json:"project_id"`
+	EnvironmentID             string                 `json:"environment_id"`
+	DeploymentID              string                 `json:"deployment_id"`
+	WorkerPoolID              string                 `json:"worker_pool_id"`
+	WorkerID                  string                 `json:"worker_id"`
+	SPIFFEID                  string                 `json:"spiffe_id"`
+	RuntimeEndpoint           string                 `json:"runtime_endpoint"`
+	CertificateDERBase64      string                 `json:"certificate_der_base64"`
+	CertificateChainDERBase64 []string               `json:"certificate_chain_der_base64"`
+	TrustBundleDERBase64      []string               `json:"trust_bundle_der_base64"`
+	TrustBundleVersion        string                 `json:"trust_bundle_version"`
+	CertificateExpiresAt      time.Time              `json:"certificate_expires_at"`
+	RenewAfter                time.Time              `json:"renew_after"`
+	WorkloadToken             string                 `json:"workload_token"`
+	TokenType                 string                 `json:"token_type"`
+	TokenExpiresAt            time.Time              `json:"token_expires_at"`
+	PrivateKeyPEM             string                 `json:"private_key_pem"`
 }
 
 type externalWorkerTokenRefresh struct {
@@ -58,6 +66,8 @@ type externalWorkerTokenRefresh struct {
 func loadOrOpenExternalWorkerIdentity(ctx context.Context, config externalWorkerBootstrapConfig, credential string, authority externalWorkerConnection) (*externalWorkerIdentity, error) {
 	if identity, err := readExternalWorkerIdentity(config.sessionPath, authority); err == nil {
 		return identity, nil
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return nil, err
 	}
 	privateKey, csr, err := newExternalWorkerCSR()
 	if err != nil {
@@ -109,19 +119,29 @@ func (s *externalWorkerSession) refreshIdentityTokenLocked(ctx context.Context) 
 }
 
 func (s *externalWorkerSession) renewIdentityLocked(ctx context.Context) error {
-	privateKey, csr, err := newExternalWorkerCSR()
-	if err != nil {
-		return err
+	if s.identity.PendingRenewal == nil {
+		privateKey, csr, err := newExternalWorkerCSR()
+		if err != nil {
+			return err
+		}
+		pending := *s.identity
+		pending.PendingRenewal = &externalWorkerRenewal{RequestID: uuid.NewString(), PrivateKeyPEM: privateKey, CSRDERBase64: csr}
+		if err := writeExternalWorkerIdentity(s.config.sessionPath, &pending); err != nil {
+			return err
+		}
+		s.identity = &pending
 	}
+	pending := s.identity.PendingRenewal
 	client, err := s.identityHTTPClient()
 	if err != nil {
 		return err
 	}
 	var next externalWorkerIdentity
-	if err := externalWorkerIdentityRequest(ctx, client, s.config.identityURL.String(), s.identity.WorkloadToken, "api/v1/external-worker-sessions/renew", map[string]string{"csr_der_base64": csr}, &next); err != nil {
+	if err := externalWorkerIdentityRequest(ctx, client, s.config.identityURL.String(), s.identity.WorkloadToken, "api/v1/external-worker-sessions/renew", map[string]string{"request_id": pending.RequestID, "csr_der_base64": pending.CSRDERBase64}, &next); err != nil {
 		return err
 	}
-	next.PrivateKeyPEM = privateKey
+	next.PrivateKeyPEM = pending.PrivateKeyPEM
+	next.PendingRenewal = nil
 	if next.RuntimeEndpoint == "" {
 		next.RuntimeEndpoint = s.connection.RuntimeEndpoint
 	}
@@ -172,7 +192,11 @@ func (s *externalWorkerSession) identityTLSConfig(serverName string) (*tls.Confi
 	if s.identity == nil {
 		return nil, errors.New("agnt5: worker identity is unavailable")
 	}
-	certificate, roots, err := parseExternalWorkerTLSIdentity(s.identity)
+	certificate, _, err := parseExternalWorkerTLSIdentity(s.identity)
+	if err != nil {
+		return nil, err
+	}
+	roots, err := externalWorkerServerRoots()
 	if err != nil {
 		return nil, err
 	}
@@ -238,8 +262,18 @@ func newExternalWorkerCSR() (string, string, error) {
 }
 
 func validateExternalWorkerIdentity(identity *externalWorkerIdentity, authority externalWorkerConnection) error {
+	if err := validateExternalWorkerIdentityMaterial(identity, authority); err != nil {
+		return err
+	}
+	if !identity.TokenExpiresAt.After(time.Now().Add(30 * time.Second)) {
+		return errors.New("agnt5: worker token requires refresh")
+	}
+	return nil
+}
+
+func validateExternalWorkerIdentityMaterial(identity *externalWorkerIdentity, authority externalWorkerConnection) error {
 	now := time.Now()
-	if identity == nil || identity.ProjectID != authority.ProjectID || identity.EnvironmentID != authority.EnvironmentID || identity.DeploymentID != authority.DeploymentID || identity.WorkerPoolID != authority.WorkerPoolID || identity.SessionID == "" || identity.WorkerID == "" || identity.PrivateKeyPEM == "" || identity.WorkloadToken == "" || identity.CertificateDERBase64 == "" || len(identity.TrustBundleDERBase64) == 0 || !identity.CertificateExpiresAt.After(now.Add(30*time.Second)) || !identity.TokenExpiresAt.After(now.Add(30*time.Second)) {
+	if identity == nil || identity.ProjectID != authority.ProjectID || identity.EnvironmentID != authority.EnvironmentID || identity.DeploymentID != authority.DeploymentID || identity.WorkerPoolID != authority.WorkerPoolID || identity.SessionID == "" || identity.WorkerID == "" || identity.PrivateKeyPEM == "" || identity.WorkloadToken == "" || identity.CertificateDERBase64 == "" || len(identity.TrustBundleDERBase64) == 0 || !identity.CertificateExpiresAt.After(now.Add(30*time.Second)) {
 		return errors.New("agnt5: worker identity is expired, incomplete, or outside discovery authority")
 	}
 	_, _, err := parseExternalWorkerTLSIdentity(identity)
@@ -262,7 +296,7 @@ func readExternalWorkerIdentity(path string, authority externalWorkerConnection)
 	if err := json.Unmarshal(contents, &identity); err != nil {
 		return nil, err
 	}
-	if err := validateExternalWorkerIdentity(&identity, authority); err != nil {
+	if err := validateExternalWorkerIdentityMaterial(&identity, authority); err != nil {
 		return nil, err
 	}
 	return &identity, nil
@@ -304,6 +338,14 @@ func writeExternalWorkerIdentity(path string, identity *externalWorkerIdentity) 
 	if err := os.Rename(temporaryPath, path); err != nil {
 		return fmt.Errorf("agnt5: replace worker identity atomically: %w", err)
 	}
+	directoryFile, err := os.Open(directory)
+	if err != nil {
+		return fmt.Errorf("agnt5: open session directory: %w", err)
+	}
+	defer directoryFile.Close()
+	if err := directoryFile.Sync(); err != nil {
+		return fmt.Errorf("agnt5: flush session directory: %w", err)
+	}
 	return nil
 }
 
@@ -340,4 +382,23 @@ func externalWorkerIdentityRequest(ctx context.Context, client *http.Client, bas
 		return fmt.Errorf("agnt5: decode worker identity response: %w", err)
 	}
 	return nil
+}
+
+// Server roots are independent of the workload CA used to authenticate this
+// worker to the server. Never implicitly trust workload issuers for server DNS.
+func externalWorkerServerRoots() (*x509.CertPool, error) {
+	roots, err := x509.SystemCertPool()
+	if err != nil {
+		roots = x509.NewCertPool()
+	}
+	if path := strings.TrimSpace(os.Getenv("AGNT5_WORKER_SERVER_CA_FILE")); path != "" {
+		contents, err := os.ReadFile(path)
+		if err != nil {
+			return nil, fmt.Errorf("agnt5: read worker server CA: %w", err)
+		}
+		if !roots.AppendCertsFromPEM(contents) {
+			return nil, errors.New("agnt5: worker server CA file contains no certificates")
+		}
+	}
+	return roots, nil
 }

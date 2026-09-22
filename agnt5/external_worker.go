@@ -3,6 +3,7 @@ package agnt5
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -109,8 +110,13 @@ func externalWorkerConfigFromEnv(legacyRoutingSet bool) (externalWorkerBootstrap
 	if err != nil {
 		return externalWorkerBootstrapConfig{}, false, err
 	}
+	roots, err := externalWorkerServerRoots()
+	if err != nil {
+		return externalWorkerBootstrapConfig{}, false, err
+	}
 	client := &http.Client{
-		Timeout: 10 * time.Second,
+		Transport: &http.Transport{TLSClientConfig: &tls.Config{MinVersion: tls.VersionTLS12, RootCAs: roots}},
+		Timeout:   10 * time.Second,
 		CheckRedirect: func(*http.Request, []*http.Request) error {
 			return errors.New("external worker bootstrap redirects are not allowed")
 		},
@@ -176,8 +182,17 @@ func connectExternalWorker(ctx context.Context, config externalWorkerBootstrapCo
 			return nil, err
 		}
 		session.identity = identity
-		session.token = identity.WorkloadToken
-		session.expiresAt = identity.TokenExpiresAt
+		if identity.PendingRenewal != nil || !time.Now().Before(identity.RenewAfter) {
+			if err := session.renewIdentityLocked(ctx); err != nil {
+				return nil, err
+			}
+		} else if time.Until(identity.TokenExpiresAt) <= externalTokenRefreshSkew {
+			if err := session.refreshIdentityTokenLocked(ctx); err != nil {
+				return nil, err
+			}
+		}
+		session.token = session.identity.WorkloadToken
+		session.expiresAt = session.identity.TokenExpiresAt
 	} else {
 		if err := session.refreshLocked(ctx, credential); err != nil {
 			return nil, err
@@ -192,7 +207,7 @@ func connectExternalWorker(ctx context.Context, config externalWorkerBootstrapCo
 func (s *externalWorkerSession) GetRequestMetadata(ctx context.Context, _ ...string) (map[string]string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.identity != nil && !time.Now().Before(s.identity.RenewAfter) {
+	if s.identity != nil && (s.identity.PendingRenewal != nil || !time.Now().Before(s.identity.RenewAfter)) {
 		if err := s.renewIdentityLocked(ctx); err != nil {
 			return nil, err
 		}
