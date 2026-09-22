@@ -229,7 +229,7 @@ func NewOpenAIModel(config OpenAIConfig) *OpenAIModel {
 		config.BaseURL = "https://api.openai.com"
 	}
 	if config.HTTPClient == nil {
-		config.HTTPClient = &http.Client{Timeout: 60 * time.Second}
+		config.HTTPClient = newModelHTTPClient()
 	}
 	return &OpenAIModel{config: config}
 }
@@ -295,7 +295,7 @@ func (m *OpenAIModel) Generate(ctx context.Context, request GenerateRequest) (Ge
 	for key, value := range m.config.Headers {
 		req.Header.Set(key, value)
 	}
-	resp, err := m.config.HTTPClient.Do(req)
+	resp, err := sendModelRequest(m.config.HTTPClient, "openai", req)
 	if err != nil {
 		return GenerateResponse{}, err
 	}
@@ -351,7 +351,7 @@ func NewAnthropicModel(config AnthropicConfig) *AnthropicModel {
 		config.Version = "2023-06-01"
 	}
 	if config.HTTPClient == nil {
-		config.HTTPClient = &http.Client{Timeout: 60 * time.Second}
+		config.HTTPClient = newModelHTTPClient()
 	}
 	return &AnthropicModel{config: config}
 }
@@ -409,7 +409,7 @@ func (m *AnthropicModel) Generate(ctx context.Context, request GenerateRequest) 
 	if m.config.APIKey != "" {
 		req.Header.Set("x-api-key", m.config.APIKey)
 	}
-	resp, err := m.config.HTTPClient.Do(req)
+	resp, err := sendModelRequest(m.config.HTTPClient, "anthropic", req)
 	if err != nil {
 		return GenerateResponse{}, err
 	}
@@ -455,7 +455,7 @@ func NewGoogleModel(config GoogleConfig) *GoogleModel {
 		config.Version = "v1beta"
 	}
 	if config.HTTPClient == nil {
-		config.HTTPClient = &http.Client{Timeout: 60 * time.Second}
+		config.HTTPClient = newModelHTTPClient()
 	}
 	return &GoogleModel{config: config}
 }
@@ -508,7 +508,7 @@ func (m *GoogleModel) Generate(ctx context.Context, request GenerateRequest) (Ge
 		return GenerateResponse{}, err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	resp, err := m.config.HTTPClient.Do(req)
+	resp, err := sendModelRequest(m.config.HTTPClient, "google", req)
 	if err != nil {
 		return GenerateResponse{}, err
 	}
