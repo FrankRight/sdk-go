@@ -128,10 +128,16 @@ func connectExternalWorker(ctx context.Context, config externalWorkerBootstrapCo
 	if err != nil {
 		return nil, err
 	}
+	rollout, err := prepareExternalWorkerRollout(os.Getenv(envWorkerMTLSEnabled), os.Getenv(envWorkerSessionDir), config.credential)
+	if err != nil {
+		return nil, err
+	}
 	var connection externalWorkerConnection
 	if err := externalWorkerRequest(ctx, config, credential, "api/v1/worker-discovery", map[string]any{
 		"environment":             config.environment,
-		"supported_auth_profiles": []string{authProfileBootstrapMTLS, authProfileTokenAuth},
+		"supported_auth_profiles": rollout.profiles(),
+		"mtls_ready":              rollout.ready,
+		"current_auth_profile":    rollout.currentProfile(),
 	}, &connection); err != nil {
 		return nil, err
 	}
@@ -140,6 +146,9 @@ func connectExternalWorker(ctx context.Context, config externalWorkerBootstrapCo
 	}
 	if connection.AuthProfile == "" {
 		connection.AuthProfile = authProfileTokenAuth
+	}
+	if err := rollout.accept(connection.AuthProfile); err != nil {
+		return nil, err
 	}
 	switch connection.AuthProfile {
 	case authProfileBootstrapMTLS:
