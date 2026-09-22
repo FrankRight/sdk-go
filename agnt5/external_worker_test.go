@@ -121,7 +121,7 @@ func TestExternalWorkerDiscoversExchangesAndRefreshes(t *testing.T) {
 			if body.Environment != "production" {
 				t.Errorf("environment = %q", body.Environment)
 			}
-			if len(body.SupportedAuthProfiles) != 2 || body.SupportedAuthProfiles[0] != authProfileBootstrapMTLS {
+			if len(body.SupportedAuthProfiles) != 1 || body.SupportedAuthProfiles[0] != authProfileTokenAuth {
 				t.Errorf("supported auth profiles = %v", body.SupportedAuthProfiles)
 			}
 			_ = json.NewEncoder(writer).Encode(externalWorkerConnection{
