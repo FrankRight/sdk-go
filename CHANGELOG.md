@@ -7,6 +7,15 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [Unreleased]
 
+### Fixed
+
+- Durable model, tool and delegated-agent activations begun inside an agent
+  iteration now carry that iteration as a reader-only display parent, so Studio
+  nests them under the iteration instead of beside the owning workflow step
+  (AGNT5-1243). Ownership, activation identity, digests and replay are
+  unchanged. `internal/pb` is regenerated from sdk-core 0.3.1 for the
+  `display_parent_correlation_id` field; runtimes that predate it ignore it.
+
 ## [0.10.2] - 2026-09-22
 
 ### Fixed
