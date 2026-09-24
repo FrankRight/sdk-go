@@ -16,6 +16,13 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
   unchanged. `internal/pb` is regenerated from sdk-core 0.3.1 for the
   `display_parent_correlation_id` field; runtimes that predate it ignore it.
 
+## [0.10.2] - 2026-09-22
+
+### Fixed
+
+- One slow model provider response no longer fails the whole run. OpenAI, Anthropic and Google model calls default to a ten-minute request timeout, bounded by the run's own deadline, instead of a fixed 60 seconds, and retry up to twice with jittered exponential backoff when the provider times out or answers 408, 429, 500, 502, 503, 504 or 529, honouring `Retry-After`. This matches the Python and TypeScript SDKs, including the `AGNT5_LM_MAX_RETRIES`, `AGNT5_LM_INITIAL_DELAY_MS` and `AGNT5_LM_MAX_DELAY_MS` overrides. A request that still fails returns a `ModelRequestError` that says whether the provider timed out (AGNT5-1251).
+- The worker reports its service version as 0.10.2; 0.10.1 still reported 0.10.0.
+
 ## [0.10.1] - 2026-09-22
 
 ### Added
