@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -49,12 +50,16 @@ type ToolCall struct {
 
 // GenerateRequest is a provider-neutral model request.
 type GenerateRequest struct {
-	Model       string       `json:"model,omitempty"`
-	Messages    []Message    `json:"messages"`
-	Tools       []Tool       `json:"tools,omitempty"`
-	Temperature *float64     `json:"temperature,omitempty"`
-	MaxTokens   *int         `json:"max_tokens,omitempty"`
-	Cache       *PromptCache `json:"cache,omitempty"`
+	Model       string    `json:"model,omitempty"`
+	Messages    []Message `json:"messages"`
+	Tools       []Tool    `json:"tools,omitempty"`
+	Temperature *float64  `json:"temperature,omitempty"`
+	MaxTokens   *int      `json:"max_tokens,omitempty"`
+	// ReasoningEffort is sent to OpenAI-compatible models as
+	// `reasoning_effort`: "none", "minimal", "low", "medium" or "high". gpt-6
+	// accepts none/low/medium/high; gpt-5 accepts minimal/low/medium/high.
+	ReasoningEffort string       `json:"reasoning_effort,omitempty"`
+	Cache           *PromptCache `json:"cache,omitempty"`
 	// Deprecated compatibility aliases. Prefer Cache.
 	CacheControl        bool           `json:"cache_control,omitempty"`
 	CacheTTL            string         `json:"cache_ttl,omitempty"`
@@ -216,6 +221,12 @@ type OpenAIConfig struct {
 	HTTPClient   *http.Client
 	Headers      map[string]string
 	Path         string
+	// UnderlyingModel is the model id that decides which parameters the
+	// endpoint accepts (sampling parameters, max_completion_tokens,
+	// reasoning_effort) when a request uses Model, an alias such as an Azure
+	// deployment name. A request that names another model is classified by
+	// that model.
+	UnderlyingModel string
 }
 
 // OpenAIModel is a minimal OpenAI-compatible LanguageModel.
@@ -252,7 +263,13 @@ func (m *OpenAIModel) Generate(ctx context.Context, request GenerateRequest) (Ge
 	if len(request.Tools) > 0 {
 		payload["tools"] = openAITools(request.Tools)
 	}
-	reasoning := isOpenAIReasoningModel(model)
+	// The underlying model stands in for the configured alias only; an
+	// explicit request model decides its own capabilities.
+	capabilityModel := model
+	if m.config.UnderlyingModel != "" && model == m.config.Model {
+		capabilityModel = m.config.UnderlyingModel
+	}
+	reasoning := isOpenAIReasoningModel(capabilityModel)
 	if request.Temperature != nil && !reasoning {
 		payload["temperature"] = *request.Temperature
 	}
@@ -262,6 +279,15 @@ func (m *OpenAIModel) Generate(ctx context.Context, request GenerateRequest) (Ge
 		} else {
 			payload["max_tokens"] = *request.MaxTokens
 		}
+	}
+	effort := strings.TrimSpace(request.ReasoningEffort)
+	if effort == "" && len(request.Tools) > 0 && openAIToolsNeedNoReasoning(capabilityModel) {
+		// Chat Completions accepts tools on gpt-6 only with reasoning off, so
+		// a Go agent with tools failed by default (AGNT5-1325).
+		effort = "none"
+	}
+	if effort != "" {
+		payload["reasoning_effort"] = effort
 	}
 	if cache := request.promptCache(); cache != nil && strings.TrimSpace(cache.Resource) != "" {
 		return GenerateResponse{}, errors.New("agnt5: explicit context caches are only supported for Google Gemini")
@@ -304,13 +330,9 @@ func (m *OpenAIModel) Generate(ctx context.Context, request GenerateRequest) (Ge
 	if err != nil {
 		return GenerateResponse{}, err
 	}
-	defer resp.Body.Close()
-	var decoded map[string]any
-	if err := json.NewDecoder(resp.Body).Decode(&decoded); err != nil {
+	decoded, err := decodeModelResponse(resp, "model")
+	if err != nil {
 		return GenerateResponse{}, err
-	}
-	if resp.StatusCode >= 400 {
-		return GenerateResponse{}, errors.New("agnt5: model provider returned HTTP " + intString(resp.StatusCode))
 	}
 	content := ""
 	var toolCalls []ToolCall
@@ -375,7 +397,7 @@ func (m *AnthropicModel) Generate(ctx context.Context, request GenerateRequest) 
 	payload := map[string]any{
 		"model":      model,
 		"messages":   anthropicMessages(request.Messages),
-		"max_tokens": 1024,
+		"max_tokens": claudeDefaultMaxTokens(model),
 	}
 	if system := firstSystemMessage(request.Messages); system != "" {
 		payload["system"] = system
@@ -397,7 +419,8 @@ func (m *AnthropicModel) Generate(ctx context.Context, request GenerateRequest) 
 	if request.MaxTokens != nil {
 		payload["max_tokens"] = *request.MaxTokens
 	}
-	if request.Temperature != nil {
+	// Claude after Opus 4.6 / Sonnet 4.6 rejects sampling parameters (AGNT5-1403).
+	if request.Temperature != nil && !claudeRejectsSamplingParams(model) {
 		payload["temperature"] = *request.Temperature
 	}
 	body, err := json.Marshal(payload)
@@ -418,13 +441,9 @@ func (m *AnthropicModel) Generate(ctx context.Context, request GenerateRequest) 
 	if err != nil {
 		return GenerateResponse{}, err
 	}
-	defer resp.Body.Close()
-	var decoded map[string]any
-	if err := json.NewDecoder(resp.Body).Decode(&decoded); err != nil {
+	decoded, err := decodeModelResponse(resp, "anthropic")
+	if err != nil {
 		return GenerateResponse{}, err
-	}
-	if resp.StatusCode >= 400 {
-		return GenerateResponse{}, errors.New("agnt5: anthropic provider returned HTTP " + intString(resp.StatusCode))
 	}
 	content, toolCalls := parseAnthropicContent(decoded["content"])
 	return GenerateResponse{
@@ -517,13 +536,9 @@ func (m *GoogleModel) Generate(ctx context.Context, request GenerateRequest) (Ge
 	if err != nil {
 		return GenerateResponse{}, err
 	}
-	defer resp.Body.Close()
-	var decoded map[string]any
-	if err := json.NewDecoder(resp.Body).Decode(&decoded); err != nil {
+	decoded, err := decodeModelResponse(resp, "google")
+	if err != nil {
 		return GenerateResponse{}, err
-	}
-	if resp.StatusCode >= 400 {
-		return GenerateResponse{}, errors.New("agnt5: google provider returned HTTP " + intString(resp.StatusCode))
 	}
 	content, finishReason, toolCalls := parseGoogleContent(decoded["candidates"])
 	return GenerateResponse{
@@ -619,6 +634,11 @@ type AzureOpenAIConfig struct {
 	Endpoint   string
 	APIKey     string
 	Deployment string
+	// Model is the model the deployment serves, such as "gpt-6-luna". A
+	// deployment name is user-chosen, so set this for reasoning models to get
+	// max_completion_tokens, no sampling parameters and reasoning_effort
+	// handling. Defaults to Deployment.
+	Model      string
 	APIVersion string
 	HTTPClient *http.Client
 }
@@ -634,12 +654,13 @@ func NewAzureOpenAIModel(config AzureOpenAIConfig) *OpenAIModel {
 		base += "/openai/deployments/" + url.PathEscape(config.Deployment)
 	}
 	return NewOpenAIModel(OpenAIConfig{
-		BaseURL:      base,
-		APIKey:       config.APIKey,
-		APIKeyHeader: "api-key",
-		Model:        config.Deployment,
-		HTTPClient:   config.HTTPClient,
-		Path:         "/chat/completions?api-version=" + url.QueryEscape(apiVersion),
+		BaseURL:         base,
+		APIKey:          config.APIKey,
+		APIKeyHeader:    "api-key",
+		Model:           config.Deployment,
+		UnderlyingModel: config.Model,
+		HTTPClient:      config.HTTPClient,
+		Path:            "/chat/completions?api-version=" + url.QueryEscape(apiVersion),
 	})
 }
 
@@ -876,22 +897,39 @@ func languageModelIdentity(model LanguageModel, request GenerateRequest) (string
 	return name, provider
 }
 
-// isOpenAIReasoningModel reports whether an OpenAI model rejects sampling
-// parameters (`temperature`, `top_p`) and takes `max_completion_tokens` instead
-// of `max_tokens`: the gpt-5 and gpt-6 families and the o-series. gpt-4o and
-// gpt-4.1 still accept them. The model name is matched without any
-// `openai/` prefix.
-func isOpenAIReasoningModel(model string) bool {
-	name := strings.TrimPrefix(strings.ToLower(strings.TrimSpace(model)), "openai/")
-	if strings.HasPrefix(name, "gpt-5") || strings.HasPrefix(name, "gpt-6") {
-		return true
-	}
-	for _, family := range []string{"o1", "o3", "o4"} {
-		if name == family || strings.HasPrefix(name, family+"-") {
-			return true
+// maxProviderErrorBody bounds how much of a provider's error body is kept.
+const maxProviderErrorBody = 2048
+
+// decodeModelResponse reads a provider response. An error status keeps the
+// provider's body (truncated) in the error, since that is where the provider
+// says what it rejected; it used to be dropped, leaving only "HTTP 400"
+// (AGNT5-1325). A non-JSON error body is reported the same way rather than as
+// a decode error.
+func decodeModelResponse(resp *http.Response, provider string) (map[string]any, error) {
+	defer resp.Body.Close()
+	if resp.StatusCode >= 400 {
+		// Read one byte past the cap to know whether to mark truncation,
+		// without buffering an arbitrarily large error page.
+		raw, err := io.ReadAll(io.LimitReader(resp.Body, maxProviderErrorBody+1))
+		if err != nil {
+			return nil, err
 		}
+		detail := string(raw)
+		if len(raw) > maxProviderErrorBody {
+			detail = string(raw[:maxProviderErrorBody]) + "…"
+		}
+		detail = strings.TrimSpace(detail)
+		message := "agnt5: " + provider + " provider returned HTTP " + intString(resp.StatusCode)
+		if detail != "" {
+			message += ": " + detail
+		}
+		return nil, errors.New(message)
 	}
-	return false
+	var decoded map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&decoded); err != nil {
+		return nil, err
+	}
+	return decoded, nil
 }
 
 func openAIProvider(baseURL string) string {
