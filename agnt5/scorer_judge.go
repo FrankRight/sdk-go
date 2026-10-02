@@ -20,8 +20,12 @@ Respond with a JSON object containing:
 
 Respond ONLY with the JSON object, no other text.`
 
+// correctnessJudgeCriteria judges agreement with the reference answer, not
+// similarity to it: an answer that explains itself must not be marked partial.
+// Keep it identical to the Python and TypeScript SDKs' correctness rubric.
+const correctnessJudgeCriteria = `Evaluate whether the output's answer agrees with the expected output. The expected output is a reference answer: it says what the right answer is, not what the output must look like, so the output does not need to match its length, wording, or format. An output that gives the right answer and also explains it, shows working, or restates the question is fully correct and is a pass, not partial; for example, "3 + 4 = 7, because 3 and 4 make 7." is a pass against "7". Award partial only when the expected output has several required parts and the output leaves one out. Award fail when the answer is wrong, contradicts the expected output, or is missing. If there is no expected output, judge whether the output correctly answers the input.`
+
 const (
-	correctnessJudgeCriteria  = "Evaluate whether the output correctly answers the input and matches the expected output. Score 1.0 for fully correct answers, 0.5 for partially correct answers, and 0.0 for incorrect or unsupported answers."
 	faithfulnessJudgeCriteria = "Evaluate whether the output is faithful to the provided context. Penalize claims that are unsupported, contradicted by context, or omit critical context needed for the answer."
 	goalSuccessJudgeCriteria  = "Evaluate whether the overall session achieved the user's goal. Use available trace-eval context, journal events, session state, input, output, and expected result when provided. Penalize incomplete task completion, missing required actions, tool failures that affected the outcome, and unsupported success claims."
 	agentJudgeDefaultCriteria = "Investigate the provided evidence before scoring. Check factual correctness, grounding in the trace and tool evidence, appropriate tool usage, and whether the final output is supported by the observed execution. Penalize unsupported claims, missing evidence, tool misuse, and reasoning that conflicts with the trace."
@@ -374,6 +378,11 @@ func runCorrectnessJudge(ctx context.Context, request ScorerRequest) (ScorerResu
 	}
 	request.Output, request.Expected = output, expected
 	request.Config = judgePresetConfig(config, correctnessJudgeCriteria, true)
+	// The judge picks a pass / partial / fail label, mapped to 1.0 / 0.5 / 0.0,
+	// the same way the evaluator presets judge. A bare 0-1 score let small
+	// judge models mark explained answers partial.
+	request.Config["system_prompt"] = EvaluatorSystemPrompt
+	request.Config["choice_scores"] = map[string]any{"fail": 0.0, "partial": 0.5, "pass": 1.0}
 	result, err := runLLMJudge(ctx, request)
 	if err != nil {
 		return ScorerResult{}, err

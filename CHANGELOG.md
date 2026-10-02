@@ -5,6 +5,12 @@ All notable changes to the AGNT5 Go SDK are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- The built-in `correctness` judge no longer marks right answers down for explaining them. Its rubric asked whether the output "matches the expected output" and gave partial credit otherwise, so with the default `gpt-4o-mini` judge an answer like "**Augustus** was the first Roman emperor…" scored 0.5 against "Augustus" and failed a 0.8 pass mark. The rubric now judges agreement with the reference answer, not similarity: a right answer that explains itself is a pass, partial is only for a missing required part, and a wrong or contradicting answer fails. The built-in scorer now asks the judge for a `pass` / `partial` / `fail` label, scored 1.0 / 0.5 / 0.0, with `EvaluatorSystemPrompt`, so its results carry that label. The rubric is identical in the Python and TypeScript SDKs.
+
 ## [0.10.5] - 2026-10-02
 
 ### Fixed

@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -91,6 +92,64 @@ func TestLLMJudgeWithInjectedModelAndChoiceScores(t *testing.T) {
 	}
 	if result.Score != 0.5 || result.Passed || result.Label != "partial" {
 		t.Fatalf("result = %#v", result)
+	}
+}
+
+type correctnessRecordingModel struct {
+	content  string
+	requests []GenerateRequest
+}
+
+func (m *correctnessRecordingModel) Generate(_ context.Context, request GenerateRequest) (GenerateResponse, error) {
+	m.requests = append(m.requests, request)
+	return GenerateResponse{Content: m.content}, nil
+}
+
+// The correctness judge marked right answers that explain themselves as
+// partial. It now judges agreement, not similarity, and picks a pass /
+// partial / fail label with the same rubric as the Python and TypeScript SDKs.
+func TestCorrectnessJudgeScoresLabelsWithAgreementRubric(t *testing.T) {
+	for _, phrase := range []string{
+		"Evaluate whether the output's answer agrees with the expected output.",
+		"does not need to match its length, wording, or format",
+		"is fully correct and is a pass, not partial",
+		"Award partial only when the expected output has several required parts",
+		"Award fail when the answer is wrong, contradicts the expected output",
+	} {
+		if !strings.Contains(correctnessJudgeCriteria, phrase) {
+			t.Fatalf("correctness rubric lacks %q", phrase)
+		}
+	}
+	// The old rubric asked for a match and gave partial credit for anything else.
+	if strings.Contains(correctnessJudgeCriteria, "matches the expected output") {
+		t.Fatal("correctness rubric still asks for a match")
+	}
+
+	for label, want := range map[string]float64{"pass": 1, "partial": 0.5, "fail": 0} {
+		model := &correctnessRecordingModel{content: `{"label":"` + label + `","explanation":"judged"}`}
+		ctx := WithLLMJudgeModel(context.Background(), model)
+		result, err := NewScorerRegistry().Run(ctx, "correctness", ScorerRequest{
+			Input:    map[string]any{"message": "Who was the first emperor of Rome?"},
+			Output:   map[string]any{"output": "**Augustus** was the first Roman emperor, from 27 BCE."},
+			Expected: map[string]any{"output": "Augustus"},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		messages := model.requests[0].Messages
+		if messages[0].Content != EvaluatorSystemPrompt {
+			t.Fatalf("%s: system prompt = %q", label, messages[0].Content)
+		}
+		if !strings.Contains(messages[1].Content, correctnessJudgeCriteria) ||
+			!strings.Contains(messages[1].Content, "Choose exactly one label from: fail, partial, pass") {
+			t.Fatalf("%s: judge prompt = %q", label, messages[1].Content)
+		}
+		if result.Score != want || result.Passed != (label == "pass") || result.Label != label {
+			t.Fatalf("%s: result = %#v", label, result)
+		}
+		if result.Metadata["judge_preset"] != "correctness" || result.Metadata["selected_label"] != label {
+			t.Fatalf("%s: metadata = %#v", label, result.Metadata)
+		}
 	}
 }
 
